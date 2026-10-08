@@ -1,0 +1,172 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    /* Fuentes: las variables --font-inter y --font-cormorant las define next/font en layout.tsx */
+    --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    --font-heading: var(--font-cormorant), Georgia, serif;
+    --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+/*
+  Paleta Artelier (Figma > Branding > Colors light / Colors dark)
+
+  Mapa Figma -> shadcn:
+    Primary    -> --primary
+    Secondary  -> --secondary (dorado de marca)
+    Background -> --background
+    Surface    -> --card / --popover / --muted
+    Text       -> --foreground
+    Muted      -> --muted-foreground
+    Border     -> --border / --input
+    Success / Warning / Error -> --success / --warning / --destructive
+*/
+:root {
+    --background: #f4ebd8;
+    --foreground: #36251a;
+
+    --card: #e7dfcf;
+    --card-foreground: #36251a;
+    --popover: #e7dfcf;
+    --popover-foreground: #36251a;
+
+    --primary: #50362a;
+    --primary-foreground: #f4ebd8;
+
+    --secondary: #e5b442;
+    --secondary-foreground: #36251a;
+
+    --muted: #e7dfcf;
+    --muted-foreground: #89796b;
+
+    /* Hover de items (dropdown, ghost). No viene de Figma: surface un poco más oscuro */
+    --accent: color-mix(in oklab, #e7dfcf 88%, #36251a);
+    --accent-foreground: #36251a;
+
+    --destructive: #c33d3a;
+    --destructive-foreground: #f4ebd8;
+    --success: #527d46;
+    --success-foreground: #f4ebd8;
+    --warning: #d28a22;
+    --warning-foreground: #36251a;
+
+    --border: #c2c0bc;
+    --input: #c2c0bc;
+    --ring: #e5b442;
+
+    --radius: 0.625rem;
+
+    --sidebar: #e7dfcf;
+    --sidebar-foreground: #36251a;
+    --sidebar-primary: #50362a;
+    --sidebar-primary-foreground: #f4ebd8;
+    --sidebar-accent: color-mix(in oklab, #e7dfcf 88%, #36251a);
+    --sidebar-accent-foreground: #36251a;
+    --sidebar-border: #c2c0bc;
+    --sidebar-ring: #e5b442;
+}
+
+.dark {
+    --background: #1f1f1e;
+    --foreground: #e7dccd;
+
+    --card: #2a241e;
+    --card-foreground: #e7dccd;
+    --popover: #2a241e;
+    --popover-foreground: #e7dccd;
+
+    --primary: #634530;
+    --primary-foreground: #e7dccd;
+
+    --secondary: #ecba5a;
+    --secondary-foreground: #1f1f1e;
+
+    --muted: #2a241e;
+    --muted-foreground: #938778;
+
+    --accent: color-mix(in oklab, #2a241e 85%, #e7dccd);
+    --accent-foreground: #e7dccd;
+
+    --destructive: #c33d3a;
+    --destructive-foreground: #e7dccd;
+    --success: #527d46;
+    --success-foreground: #e7dccd;
+    --warning: #d28a22;
+    --warning-foreground: #1f1f1e;
+
+    --border: #322d2a;
+    --input: #322d2a;
+    --ring: #ecba5a;
+
+    --sidebar: #2a241e;
+    --sidebar-foreground: #e7dccd;
+    --sidebar-primary: #634530;
+    --sidebar-primary-foreground: #e7dccd;
+    --sidebar-accent: color-mix(in oklab, #2a241e 85%, #e7dccd);
+    --sidebar-accent-foreground: #e7dccd;
+    --sidebar-border: #322d2a;
+    --sidebar-ring: #ecba5a;
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+
+    html {
+        @apply font-sans;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        @apply font-heading;
+    }
+}
