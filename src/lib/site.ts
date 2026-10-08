@@ -7,7 +7,7 @@ export const SITE = {
     phoneDigits: "573105808185",
     location: "Cajicá, Cundinamarca, Colombia",
     hours: ["Lun - vie: 8:00 a.m. - 5:00 p.m.", "Sáb: 10:00 a.m. - 2:00 p.m."],
-    credit: "MimiRandoms",
+    credit: "MimiRandomDev",
     social: {
         instagram: "https://instagram.com/arteliercajica",
         facebook: "https://www.facebook.com/profile.php?id=61584642207750",
