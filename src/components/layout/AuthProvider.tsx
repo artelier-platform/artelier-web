@@ -3,31 +3,21 @@
 
 import React, { useEffect } from "react";
 import { AuthStateStore } from "@/store/auth";
-import type { ApiResponse, AuthData } from "@/types";
+import { hasSessionCookie, refreshSession } from "@/lib/auth-refresh";
 
 import "@/lib/interceptors";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         async function hydrate() {
-            try {
-                const result = await fetch("/api/auth/refresh", { method: "POST" });
-                const data: ApiResponse<AuthData> = await result.json();
-
-                if (data.success && data.data?.token && data.data?.role && data.data?.expiresIn) {
-                    AuthStateStore.getState().setAuth(
-                        data.data.token,
-                        data.data.role,
-                        data.data.expiresIn
-                    );
-                } else {
-                    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-                }
-            } catch {
-                await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+            // Sin cookie de sesión no hay nada que refrescar (visitante anónimo).
+            if (hasSessionCookie()) {
+                await refreshSession();
             }
+            AuthStateStore.getState().setInitialized();
         }
 
+        // En dev React ejecuta este efecto dos veces; refreshSession comparte la petición.
         void hydrate();
     }, []);
 

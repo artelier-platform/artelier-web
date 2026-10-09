@@ -1,8 +1,9 @@
 // src/lib/interceptors.ts
 import { bff } from "@/lib/bff";
 import { AuthStateStore } from "@/store/auth";
+import { refreshSession } from "@/lib/auth-refresh";
 import type { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from "axios";
-import type { ApiResponse, AuthData } from "@/types";
+import type { ApiResponse } from "@/types";
 
 // ------------------- { types } -------------------
 
@@ -47,28 +48,20 @@ bff.interceptors.response.use(
         if (status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
-            try {
-                const result = await fetch("/api/auth/refresh", {
-                    method: "POST",
-                });
+            // Varias peticiones con 401 a la vez comparten un único refresh.
+            const token = await refreshSession();
 
-                const data: ApiResponse<AuthData> = await result.json();
-
-                if (data.success && data.data?.token && data.data?.expiresIn) {
-                    AuthStateStore.getState().updateAccessToken(
-                        data.data.token,
-                        data.data.expiresIn
-                    );
-
-                    originalRequest.headers.Authorization = `Bearer ${data.data.token}`;
-
-                    return bff(originalRequest);
-                }
-            } catch {}
+            if (token) {
+                originalRequest.headers.Authorization = `Bearer ${token}`;
+                return bff(originalRequest);
+            }
 
             await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
             AuthStateStore.getState().clearAuth();
-            window.location.href = "/login";
+
+            if (window.location.pathname !== "/login") {
+                window.location.href = "/login";
+            }
 
             return Promise.reject(error);
         }
