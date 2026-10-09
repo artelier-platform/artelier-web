@@ -1,6 +1,8 @@
 // src/app/api/auth/refresh/route.ts
+import { isAxiosError } from "axios";
 import { refresh } from "@/server/auth/auth.service";
 import { cookies } from "next/headers";
+import type { ApiResponse, AuthData } from "@/types";
 
 export async function POST() {
     const cookieStore = await cookies();
@@ -13,7 +15,30 @@ export async function POST() {
         );
     }
 
-    const response = await refresh(refreshToken);
+    let response: ApiResponse<AuthData>;
+
+    try {
+        response = await refresh(refreshToken);
+    } catch (error) {
+        const status = isAxiosError(error) ? error.response?.status : undefined;
+
+        // El backend rechazó el token (vencido, ya usado, usuario baneado): sesión terminada.
+        if (status !== undefined && status >= 400 && status < 500) {
+            cookieStore.delete("refresh_token");
+            cookieStore.delete("user_role");
+
+            return Response.json(
+                { success: false, message: "Session expired" },
+                { status: 401 }
+            );
+        }
+
+        // Backend caído o error de red: NO borramos las cookies, el token sigue siendo válido.
+        return Response.json(
+            { success: false, message: "Auth service unavailable" },
+            { status: 503 }
+        );
+    }
 
     if (response.success && response.data) {
         // Rotamos el refresh token (single-use según el backend)

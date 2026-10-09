@@ -44,7 +44,7 @@ jobs:
       - name: Build
         run: pnpm build
         env:
-          NEXT_PUBLIC_API_URL: https://backend.example.invalid
+          API_URL: https://backend.example.invalid
           NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ci-placeholder
           NEXT_PUBLIC_WOMPI_PUBLIC_KEY: pub_test_ci_placeholder
 

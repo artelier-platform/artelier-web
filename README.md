@@ -253,7 +253,7 @@ Copy `.env.example` to `.env.local` and fill in the following:
 
 ```env
 # Backend API (Render)
-NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
+API_URL=https://your-backend.onrender.com
 
 # Cloudinary
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name

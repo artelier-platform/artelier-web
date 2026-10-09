@@ -6,6 +6,8 @@ export type AuthState = {
     accessToken: string | null;
     expiresAt: number | null;
     isAuthenticated: boolean;
+    /** true cuando ya terminó el intento de hidratar la sesión (con o sin éxito). */
+    isInitialized: boolean;
 
     setAuth: (
         token: string,
@@ -18,6 +20,8 @@ export type AuthState = {
         expiresIn: number
     ) => void;
 
+    setInitialized: () => void;
+
     clearAuth: () => void;
 }
 
@@ -26,6 +30,7 @@ export const AuthStateStore = create<AuthState>((set) => ({
     accessToken: null,
     expiresAt: null,
     isAuthenticated: false,
+    isInitialized: false,
 
     setAuth: (token, role, expiresIn) =>
         set({
@@ -40,6 +45,8 @@ export const AuthStateStore = create<AuthState>((set) => ({
             accessToken: token,
             expiresAt: Date.now() + expiresIn * 1000
         }),
+
+    setInitialized: () => set({ isInitialized: true }),
 
     clearAuth: () =>
         set({

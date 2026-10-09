@@ -1,12 +1,15 @@
 // src/hooks/useAuth.ts
 import { AuthData, LoginRequest, RegisterRequest, ApiResponse } from "@/types";
-import { AuthStateStore } from '@/store/auth';
+import { AuthStateStore } from "@/store/auth";
+import { refreshSession } from "@/lib/auth-refresh";
 
 export function useAuth() {
-    const { role, isAuthenticated, expiresAt } = AuthStateStore()
+    const role = AuthStateStore((s) => s.role);
+    const isAuthenticated = AuthStateStore((s) => s.isAuthenticated);
+    const isInitialized = AuthStateStore((s) => s.isInitialized);
+    const expiresAt = AuthStateStore((s) => s.expiresAt);
     const setAuth = AuthStateStore((s) => s.setAuth);
     const clearAuth = AuthStateStore((s) => s.clearAuth);
-    const updateAccessToken = AuthStateStore((s) => s.updateAccessToken);
 
     async function login(request: LoginRequest): Promise<ApiResponse<AuthData>> {
         const result: ApiResponse<AuthData> =
@@ -50,20 +53,9 @@ export function useAuth() {
         return result;
     }
 
-    async function refresh(): Promise<ApiResponse<AuthData>> {
-        const result: ApiResponse<AuthData> =
-            await fetch("/api/auth/refresh", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                }
-            }).then(res => res.json());
-
-        if (result.success && result.data?.token && result.data?.expiresIn) {
-            updateAccessToken(result.data.token, result.data.expiresIn);
-        }
-
-        return result;
+    /** true si la sesión se refrescó. Comparte la petición con el resto de la app. */
+    async function refresh(): Promise<boolean> {
+        return (await refreshSession()) !== null;
     }
 
     async function logout(): Promise<ApiResponse<never>> {
@@ -80,6 +72,7 @@ export function useAuth() {
     return {
         role,
         isAuthenticated,
+        isInitialized,
         expiresAt,
         login,
         register,
