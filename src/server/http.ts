@@ -1,50 +1,108 @@
 // src/server/http.ts
 import { isAxiosError } from "axios";
 
-/** Authorization que el navegador mandó al BFF (lo pone el interceptor del cliente). */
+/**
+ * Retrieves the Authorization header forwarded by the client to the BFF
+ * (injected by the client-side HTTP interceptor).
+ *
+ * @param request - The incoming Web Fetch API `Request` object.
+ * @returns The authorization header string if present, or `undefined`.
+ */
 export function getAuth(request: Request): string | undefined {
     return request.headers.get("authorization") ?? undefined;
 }
 
-/** Config de axios con el token reenviado al backend. */
+/**
+ * Generates an Axios configuration object containing the authorization header
+ * to be forwarded downstream to backend services.
+ *
+ * @param auth - The raw authorization token or header string.
+ * @returns An Axios request config object with the Authorization header, or an empty object if undefined/null.
+ */
 export function bearer(auth?: string | null): { headers?: { Authorization: string } } {
     return auth ? { headers: { Authorization: auth } } : {};
 }
 
+/**
+ * Parses and extracts URL query parameters from a request into a key-value record.
+ *
+ * @param request - The incoming Web Fetch API `Request` object.
+ * @returns A record of query parameter key-value pairs.
+ */
 export function queryOf(request: Request): Record<string, string> {
     return Object.fromEntries(new URL(request.url).searchParams.entries());
 }
 
-/** Lee una parte JSON de un multipart (llega como archivo/blob o como texto). */
+/**
+ * Reads and parses a JSON segment from a multipart/form-data submission
+ * (which may arrive as a file/blob or text payload).
+ *
+ * @template T - The expected type of the parsed JSON payload.
+ * @param form - The `FormData` instance containing the multipart payload.
+ * @param name - The field name of the JSON part.
+ * @returns A promise that resolves to the parsed JSON object of type `T`.
+ */
 export async function readJsonPart<T>(form: FormData, name: string): Promise<T> {
     const part = form.get(name);
     const text = typeof part === "string" ? part : await (part as Blob).text();
     return JSON.parse(text) as T;
 }
 
+/**
+ * Extracts and filters all file entries matching a specific field name from a multipart/form-data submission.
+ *
+ * @param form - The `FormData` instance.
+ * @param name - The field name corresponding to the file entries.
+ * @returns An array of filtered `File` objects.
+ */
 export function readFiles(form: FormData, name: string): File[] {
     return form.getAll(name).filter((f): f is File => f instanceof File);
 }
 
 /**
- * Ejecuta la llamada al backend y la devuelve como Response.
- * Si el backend responde con error, se conserva su status y su cuerpo
- * (así el interceptor del cliente ve los 401 y los errores de validación).
+ * Executes a backend API call and wraps the result as a Web Fetch `Response`.
+ * Delegates error handling and transformation to `responseFromError` upon failure.
+ *
+ * @template T - The expected return type of the asynchronous backend call.
+ * @param call - A function returning a promise with the backend payload.
+ * @param okStatus - The HTTP status code to return upon success (defaults to `200`).
+ * @returns A promise resolving to a Web Fetch `Response` object.
  */
-export async function proxy<T>(call: () => Promise<T>, okStatus = 200): Promise<Response> {
+export async function proxy<T>(
+    call: () => Promise<T>,
+    okStatus: number = 200
+): Promise<Response> {
     try {
         return Response.json(await call(), { status: okStatus });
     } catch (error) {
-        if (isAxiosError(error) && error.response) {
-            const body = error.response.data ?? { success: false, message: "Error del servidor" };
-            return Response.json(body, { status: error.response.status });
-        }
-        if (isAxiosError(error)) {
+        return responseFromError(error);
+    }
+}
+
+/**
+ * Transforms an arbitrary error (typically an Axios error or generic exception)
+ * into a standardized HTTP `Response` object for BFF error responses.
+ *
+ * @param error - The caught error instance (`unknown` type).
+ * @returns A Web Fetch `Response` containing the structured error message and appropriate HTTP status code.
+ */
+export function responseFromError(error: unknown): Response {
+    if (isAxiosError(error)) {
+        if (error.response) {
             return Response.json(
-                { success: false, message: "No pudimos conectar con el servidor" },
-                { status: 502 }
+                error.response.data ?? { success: false, message: "Server error" },
+                { status: error.response.status }
             );
         }
-        return Response.json({ success: false, message: "Solicitud inválida" }, { status: 400 });
+
+        return Response.json(
+            { success: false, message: "Could not connect to the server" },
+            { status: 502 }
+        );
     }
+
+    return Response.json(
+        { success: false, message: "Invalid request" },
+        { status: 400 }
+    );
 }
