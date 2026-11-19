@@ -46,7 +46,7 @@ export default function LoginForm({ onSuccess, onSwitchMode }: Props) {
     }
 
     function handleForgot() {
-        // TODO(backend): flujo de recuperación de contraseña (ver docs/backend-pendiente.md)
+        // TODO(backend): flujo de recuperación de contraseña (ver tablero Roadmap API, enlazado en el README)
         toast.info("Pronto podrás recuperar tu contraseña desde aquí.", {
             description: `Mientras tanto, escríbenos a ${SITE.email}.`,
         });
@@ -87,7 +87,7 @@ export default function LoginForm({ onSuccess, onSwitchMode }: Props) {
             </div>
 
             <div className="flex items-center justify-between text-xs">
-                {/* TODO(backend): "Recordarme" aún no cambia nada (ver docs/backend-pendiente.md) */}
+                {/* TODO(backend): "Recordarme" aún no cambia nada (ver tablero Roadmap API, enlazado en el README) */}
                 <label className="flex cursor-pointer items-center gap-2">
                     <input type="checkbox" name="remember" className="size-4 accent-primary" />
                     Recordarme

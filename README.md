@@ -21,6 +21,10 @@
   Built with Next.js · React · TypeScript · Tailwind CSS · shadcn/ui · Zustand
 </p>
 
+<p align="center">
+  <a href="https://artelier-web.vercel.app/">Live site</a>
+</p>
+
 ---
 
 ## Table of Contents
@@ -68,7 +72,7 @@ This is also a full-stack portfolio project, paired with the backend repository.
 
 | Layer | Technology |
 |-------|------------|
-| **Framework** | ![Next.js](https://img.shields.io/badge/Next.js-16.2-black?logo=nextdotjs&logoColor=white) ![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=black) |
+| **Framework** | ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white) ![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=black) |
 | **Language** | ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white) |
 | **Styling & UI** | ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white) ![shadcn/ui](https://img.shields.io/badge/shadcn%2Fui-Radix-black?logo=shadcnui&logoColor=white) ![Lucide](https://img.shields.io/badge/Lucide-Icons-F56040) ![Sonner](https://img.shields.io/badge/Sonner-Toasts-black) |
 | **State** | ![Zustand](https://img.shields.io/badge/Zustand-5-orange) |
@@ -90,6 +94,8 @@ that call the Artelier API.
 - **App Layer (`src/app`)** → Pages and layouts, organized in route groups: `(shop)`, `(auth)` and `(protected)` (`account` and `admin`)
 - **BFF Layer (`src/app/api`)** → Route Handlers for auth, products, categories, orders, custom orders, payments, banners, reviews and admin
 - **Server Layer (`src/server`)** → One service per backend domain, plus a shared HTTP client
+- **Client services (`src/services`)** → Browser-side functions that call the BFF through Axios
+- **Route guard (`src/proxy.ts`)** → Redirects unauthenticated requests on `/account` and `/admin` to `/login`, and non-admin users away from `/admin`
 - **Components (`src/components`)** → `admin`, `auth`, `cart`, `layout`, `shop` and the shadcn/ui primitives in `ui`
 - **State (`src/store`)** → Zustand stores for auth, cart and UI
 - **Hooks & Lib (`src/hooks`, `src/lib`)** → Shared hooks, HTTP/BFF helpers, formatting and utilities
@@ -124,8 +130,11 @@ src
 │   ├── products
 │   ├── reviews
 │   └── stats
+├── services           # Browser-side calls to the BFF (Axios)
 ├── store              # Zustand stores
-└── types
+├── test               # Unit tests (integration and e2e to come)
+├── types
+└── proxy.ts           # Route guard for /account and /admin
 ```
 
 ---
@@ -134,13 +143,16 @@ src
 
 The frontend is **under active development**.
 
-**Already in place:** product listing and detail pages, authentication modal (login and
-registration), cart drawer, custom order dialog, theme provider, route layouts for the
-account and admin areas, and the BFF route handlers listed above.
+**Already in place:** home page with banner carousel, product listing and detail pages,
+authentication modal (login and registration), cart drawer, custom order dialog, theme
+provider, route guard (`src/proxy.ts`) protecting `/account` and `/admin` by session and
+role, route layouts for the account and admin areas, and the BFF route handlers listed above.
 
-**Still in progress:** landing page, checkout and payment result, user account pages (orders),
-the admin screens (dashboard, products, orders, custom orders, banners, users), about page,
-SEO files and route protection.
+**Still in progress:** checkout and payment result, user account pages (orders), the admin
+screens, about page and SEO files.
+
+**Backend dependencies:** some features need endpoints the API does not expose yet. The single
+source of truth for what is pending is the [Roadmap API board](https://app.notion.com/p/418f5474081e816295dedc46aaa14b12).
 
 ---
 
@@ -167,7 +179,9 @@ SEO files and route protection.
 </p>
 
 Static analysis is performed with **SonarCloud** and coverage is generated with **Vitest** (V8 provider).
-The test suite is just getting started and will grow alongside the features.
+
+Tests live in `src/test`. Today `unit/` holds the tests for `lib` and the route guard;
+`integration/` and `e2e/` will be added as those tests are written.
 
 ### Running Tests
 
@@ -222,7 +236,7 @@ cp .env.example.dev .env.local
 # Fill in your values — see Environment Variables section below
 ```
 
-On Windows PowerShell: `Copy-Item .env.example .env.local`
+On Windows PowerShell: `Copy-Item .env.example.dev .env.local`
 
 ### 4. Run the app
 
@@ -244,6 +258,7 @@ The app will be available at `http://localhost:3000`.
 | `pnpm test` | Run the tests once |
 | `pnpm test:watch` | Run the tests in watch mode |
 | `pnpm test:coverage` | Run the tests and generate coverage |
+| `pnpm types:api` | Regenerate `src/types/api.ts` from the OpenAPI spec (backend running on `localhost:8080`) |
 
 ---
 
@@ -252,17 +267,20 @@ The app will be available at `http://localhost:3000`.
 Copy `.env.example.dev` to `.env.local` and fill in the following:
 
 ```env
-# Backend API (Render)
-API_URL=https://your-backend.onrender.com
+# Backend API (local default shown)
+API_URL=http://localhost:8080
 
 # Cloudinary
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
 
 # Wompi (public key, safe for the frontend)
 NEXT_PUBLIC_WOMPI_PUBLIC_KEY=pub_test_xxx
+
+# Public base URL of the site (not read by the code yet; reserved for SEO files)
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-> ⚠️ Never commit your real `.env.local`. All `.env*` files are in `.gitignore` except `.env.example.dev`.
+> ⚠️ Never commit your real `.env.local`. All `.env*` files are in `.gitignore` except the `.env.example.*` templates (`.env.example.dev` for local work, `.env.example.prod` as a reference for production values).
 
 ---
 
@@ -303,7 +321,7 @@ requests; `main` holds the production-ready code.
 
 ### Deployment Notes
 
-- **Frontend:** Will be hosted on **Vercel** — not yet deployed
+- **Frontend:** Deployed on **Vercel** at [artelier-web.vercel.app](https://artelier-web.vercel.app/), with automatic deploys from `main`
 - **Backend:** The [Artelier API](https://github.com/MimiRandomS/artelier-api) is deployed on **Render** with automatic deploys from its `main` branch
 - **Media Storage:** Images handled via **Cloudinary**
 
