@@ -50,7 +50,7 @@ export async function POST() {
             maxAge: 60 * 60 * 24 * 30,
         });
 
-        cookieStore.set("user_role", response.data.role!, {
+        cookieStore.set("refresh_token", response.data.refreshToken, {
             httpOnly: false,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",

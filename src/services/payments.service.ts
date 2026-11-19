@@ -1,6 +1,6 @@
 import { bff } from "@/lib/bff";
 import type { ApiResponse, Payment, PaymentRequest } from "@/types";
-import type { FinancialInstitution } from "@/types/pending";
+import type { FinancialInstitution } from "@/types";
 
 /** Inicia el pago de un pedido. Para PSE y Bancolombia la respuesta trae `redirectUrl`. */
 export async function createPayment(orderId: string, body: PaymentRequest): Promise<ApiResponse<Payment>> {
