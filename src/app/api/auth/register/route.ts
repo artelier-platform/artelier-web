@@ -45,8 +45,8 @@ export async function POST(request: Request): Promise<Response> {
                 });
             }
 
-            if (response.data.role) {
-                cookieStore.set("user_role", response.data.role, {
+            if (response.data.user?.role) {
+                cookieStore.set("user_role", response.data.user.role, {
                     httpOnly: false,
                     secure: isProduction,
                     sameSite: "lax",

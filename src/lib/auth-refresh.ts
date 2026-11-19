@@ -30,13 +30,13 @@ async function doRefresh(): Promise<string | null> {
         const result = await fetch("/api/auth/refresh", { method: "POST" });
         const data: ApiResponse<AuthData> = await result.json();
 
-        if (data.success && data.data?.token && data.data.role && data.data.expiresIn) {
+        if (data.success && data.data?.accessToken && data.data.user?.role && data.data.expiresIn) {
             AuthStateStore.getState().setAuth(
-                data.data.token,
-                data.data.role,
+                data.data.accessToken,
+                data.data.user.role,
                 data.data.expiresIn
             );
-            return data.data.token;
+            return data.data.accessToken;
         }
     } catch {
         // red caída o respuesta no JSON: se trata como refresh fallido

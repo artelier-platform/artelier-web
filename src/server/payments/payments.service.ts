@@ -2,7 +2,7 @@
 import { api } from "@/lib/api";
 import { bearer } from "@/server/http";
 import type { ApiResponse, Payment, PaymentRequest } from "@/types";
-import type { FinancialInstitution } from "@/types/pending";
+import type { FinancialInstitution } from "@/types";
 
 /** La IP del cliente se reenvía en X-Forwarded-For (la ve el BFF, no el backend). */
 export async function createPayment(

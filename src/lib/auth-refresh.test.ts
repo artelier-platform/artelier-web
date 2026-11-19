@@ -5,7 +5,7 @@ import { AuthStateStore } from "@/store/auth";
 
 const okBody = {
     success: true,
-    data: { token: "new-token", role: "BUYER", expiresIn: 900 },
+    data: { accessToken: "new-token", expiresIn: 900, user: { role: "BUYER" } },
 };
 
 describe("refreshSession", () => {

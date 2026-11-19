@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Mail } from "lucide-react";
+import { User } from "lucide-react";
 import { toast } from "sonner";
 
 import IconInput from "@/components/auth/IconInput";
@@ -19,7 +19,7 @@ type Props = {
 export default function LoginForm({ onSuccess, onSwitchMode }: Props) {
     const { login } = useAuth();
 
-    const [email, setEmail] = useState("");
+    const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -30,13 +30,13 @@ export default function LoginForm({ onSuccess, onSwitchMode }: Props) {
         setLoading(true);
 
         try {
-            const result = await login({ email: email.trim(), password });
+            const result = await login({ identifier: identifier.trim(), password });
 
             if (result.success) {
                 toast.success("¡Bienvenido de nuevo!");
-                onSuccess(result.data?.role);
+                onSuccess(result.data?.user.role);
             } else {
-                setError(result.message ?? "Correo o contraseña incorrectos.");
+                setError(result.message ?? "Usuario o contraseña incorrectos.");
             }
         } catch {
             setError("No pudimos conectar con el servidor. Inténtalo de nuevo.");
@@ -60,17 +60,16 @@ export default function LoginForm({ onSuccess, onSwitchMode }: Props) {
             </div>
 
             <div className="flex flex-col gap-3">
-                <Label htmlFor="login-email" className="sr-only">
-                    Correo electrónico
+                <Label htmlFor="login-identifier" className="sr-only">
+                    Usuario o correo electrónico
                 </Label>
                 <IconInput
-                    id="login-email"
-                    icon={Mail}
-                    type="email"
-                    autoComplete="email"
-                    placeholder="Correo electrónico"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="login-identifier"
+                    icon={User}
+                    autoComplete="username"
+                    placeholder="Usuario o correo electrónico"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                     required
                 />
 

@@ -218,7 +218,7 @@ pnpm install
 ### 3. Configure environment
 
 ```bash
-cp .env.example .env.local
+cp .env.example.dev .env.local
 # Fill in your values — see Environment Variables section below
 ```
 
@@ -249,7 +249,7 @@ The app will be available at `http://localhost:3000`.
 
 ## ⚙️ Environment Variables
 
-Copy `.env.example` to `.env.local` and fill in the following:
+Copy `.env.example.dev` to `.env.local` and fill in the following:
 
 ```env
 # Backend API (Render)
@@ -262,7 +262,7 @@ NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
 NEXT_PUBLIC_WOMPI_PUBLIC_KEY=pub_test_xxx
 ```
 
-> ⚠️ Never commit your real `.env.local`. All `.env*` files are in `.gitignore` except `.env.example`.
+> ⚠️ Never commit your real `.env.local`. All `.env*` files are in `.gitignore` except `.env.example.dev`.
 
 ---
 

@@ -11,45 +11,33 @@ export function useAuth() {
     const setAuth = AuthStateStore((s) => s.setAuth);
     const clearAuth = AuthStateStore((s) => s.clearAuth);
 
-    async function login(request: LoginRequest): Promise<ApiResponse<AuthData>> {
-        const result: ApiResponse<AuthData> =
-            await fetch("/api/auth/login", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(request)
-            }).then(res => res.json());
 
-        if (result.success && result.data?.token && result.data?.role && result.data?.expiresIn) {
-            setAuth(
-                result.data.token,
-                result.data.role,
-                result.data.expiresIn
-            );
+    function storeSession(result: ApiResponse<AuthData>) {
+        const d = result.data;
+        if (result.success && d?.accessToken && d.user?.role && d.expiresIn) {
+            setAuth(d.accessToken, d.user.role, d.expiresIn);
         }
+    }
 
+    async function login(request: LoginRequest): Promise<ApiResponse<AuthData>> {
+        const result: ApiResponse<AuthData> = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(request),
+        }).then((res) => res.json());
+
+        storeSession(result);
         return result;
     }
 
     async function register(request: RegisterRequest): Promise<ApiResponse<AuthData>> {
-        const result: ApiResponse<AuthData> =
-            await fetch("/api/auth/register", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(request)
-            }).then(res => res.json());
+        const result: ApiResponse<AuthData> = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(request),
+        }).then((res) => res.json());
 
-        if (result.success && result.data?.token && result.data?.role && result.data?.expiresIn) {
-            setAuth(
-                result.data.token,
-                result.data.role,
-                result.data.expiresIn
-            );
-        }
-
+        storeSession(result);
         return result;
     }
 
