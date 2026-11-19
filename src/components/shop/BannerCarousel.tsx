@@ -4,10 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { Banner } from "@/types/pending";
+import type { Banner, BannerItem } from "@/types";
 
 type Props = {
     banners: Banner[];
@@ -16,9 +15,17 @@ type Props = {
     className?: string;
 };
 
+type Slide = BannerItem & { backgroundImageUrl: string };
+
 /** Carrusel de avisos (Figma > Carosel). Avanza solo, se pausa con el mouse y respeta "reducir movimiento". */
 export default function BannerCarousel({ banners, autoPlayMs = 6000, className }: Props) {
-    const slides = banners.filter((b) => b.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
+    const slides = banners
+        .filter((b) => b.isActive)
+        .flatMap((b) =>
+            b.items
+                .filter((item): item is Slide => item.isActive && Boolean(item.backgroundImageUrl))
+                .sort((a, c) => (a.sortOrder ?? 0) - (c.sortOrder ?? 0))
+        );
     const count = slides.length;
 
     const [index, setIndex] = useState(0);
@@ -58,8 +65,8 @@ export default function BannerCarousel({ banners, autoPlayMs = 6000, className }
                     )}
                 >
                     <Image
-                        src={slide.imageUrl}
-                        alt=""
+                        src={slide.backgroundImageUrl}
+                        alt={slide.showTitle && slide.title ? slide.title : ""}
                         fill
                         priority={i === 0}
                         sizes="100vw"
@@ -67,15 +74,21 @@ export default function BannerCarousel({ banners, autoPlayMs = 6000, className }
                         className="object-cover"
                     />
 
-                    <div className="absolute top-1/2 left-[6%] flex w-[min(20rem,80%)] -translate-y-1/2 flex-col gap-2 rounded-sm bg-card p-4 text-card-foreground shadow-md">
-                        <h2 className="font-heading text-2xl font-medium">{slide.title}</h2>
-                        <p className="text-xs leading-relaxed">{slide.description}</p>
-                        {slide.buttonLabel && slide.buttonUrl && (
-                            <Button asChild size="sm" className="mt-1 w-full">
-                                <Link href={slide.buttonUrl}>{slide.buttonLabel}</Link>
-                            </Button>
-                        )}
-                    </div>
+                    {(slide.showTitle || slide.showDescription || slide.showButton) && (
+                        <div className="absolute top-1/2 left-[6%] flex w-[min(20rem,80%)] -translate-y-1/2 flex-col gap-2 rounded-sm bg-card p-4 text-card-foreground shadow-md">
+                            {slide.showTitle && slide.title && (
+                                <h2 className="font-heading text-2xl font-medium">{slide.title}</h2>
+                            )}
+                            {slide.showDescription && slide.description && (
+                                <p className="text-xs leading-relaxed">{slide.description}</p>
+                            )}
+                            {slide.showButton && slide.buttonLabel && slide.buttonUrl && (
+                                <Button asChild size="sm" className="mt-1 w-full">
+                                    <Link href={slide.buttonUrl}>{slide.buttonLabel}</Link>
+                                </Button>
+                            )}
+                        </div>
+                    )}
                 </div>
             ))}
 
