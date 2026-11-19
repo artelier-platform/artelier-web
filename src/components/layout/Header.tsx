@@ -65,7 +65,7 @@ function SearchBar({ className, onSubmitted }: { className?: string; onSubmitted
         e.preventDefault();
         const q = query.trim();
         if (!q) return;
-        // TODO(backend): GET /products todavía no acepta `search` (ver docs/backend-pendiente.md)
+        // TODO(backend): GET /products todavía no acepta `search` (ver tablero Roadmap API, enlazado en el README)
         router.push(`/products?search=${encodeURIComponent(q)}`);
         onSubmitted?.();
     }

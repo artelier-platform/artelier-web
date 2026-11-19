@@ -19,7 +19,7 @@ import { createCustomOrder } from "@/services/custom-orders.service";
 import { AuthStateStore } from "@/store/auth";
 import { useUIStore } from "@/store/ui";
 
-// Límites provisionales: definirlos junto con el backend (ver docs/backend-pendiente.md)
+// Límites provisionales: definirlos junto con el backend (ver tablero Roadmap API, enlazado en el README)
 const MAX_FILES = 5;
 const MAX_SIZE_MB = 5;
 

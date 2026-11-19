@@ -14,7 +14,7 @@ import type {
 
 /**
  * Temporary type definitions for backend endpoints, DTO fields, or query parameters
- * that are not yet available or exposed in Swagger (see `backend-pendiente.md`).
+ * that are not yet available or exposed in Swagger (see the Roadmap API board linked in the README).
  * Once available in the API, these should be replaced by generated types in `types/api.ts`.
  */
 
