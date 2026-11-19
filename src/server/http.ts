@@ -2,6 +2,31 @@
 import { isAxiosError } from "axios";
 
 /**
+ * Custom error class representing features or endpoints that are not yet implemented or available.
+ */
+export class NotAvailableError extends Error {
+    /**
+     * Creates an instance of `NotAvailableError`.
+     *
+     * @param feature - The name or description of the unavailable feature.
+     */
+    constructor(feature: string) {
+        super(`${feature} is not available yet`);
+        this.name = "NotAvailableError";
+    }
+}
+
+/**
+ * Throws a {@link NotAvailableError} indicating that a specific feature is not available.
+ *
+ * @param feature - The name or description of the unavailable feature.
+ * @throws {NotAvailableError} Always throws the error.
+ */
+export function notAvailable(feature: string): never {
+    throw new NotAvailableError(feature);
+}
+
+/**
  * Retrieves the Authorization header forwarded by the client to the BFF
  * (injected by the client-side HTTP interceptor).
  *
@@ -80,13 +105,20 @@ export async function proxy<T>(
 }
 
 /**
- * Transforms an arbitrary error (typically an Axios error or generic exception)
+ * Transforms an arbitrary error (including `NotAvailableError`, Axios errors, or generic exceptions)
  * into a standardized HTTP `Response` object for BFF error responses.
  *
  * @param error - The caught error instance (`unknown` type).
  * @returns A Web Fetch `Response` containing the structured error message and appropriate HTTP status code.
  */
 export function responseFromError(error: unknown): Response {
+    if (error instanceof NotAvailableError) {
+        return Response.json(
+            { success: false, message: error.message },
+            { status: 501 }
+        );
+    }
+
     if (isAxiosError(error)) {
         if (error.response) {
             return Response.json(
