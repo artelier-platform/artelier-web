@@ -4,7 +4,23 @@
  */
 
 export interface paths {
-    "/products/{id}": {
+    "/users/{userId}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getProfile"];
+        put: operations["updateProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/emails/{emailId}/primary": {
         parameters: {
             query?: never;
             header?: never;
@@ -13,18 +29,49 @@ export interface paths {
         };
         get?: never;
         /**
-         * Update product
-         * @description Replaces all editable fields of an existing product.
-         *     Images are replaced only when new files are provided. Omitting `images` preserves existing ones.
-         *     Updating `name` always regenerates the slug.
+         * Set primary email
+         * @description Changes the primary email address of the authenticated user.
+         *
+         *     The selected email must:
+         *     - belong to the authenticated user;
+         *     - already be verified.
+         *
+         *     The previously primary email is automatically demoted.
+         */
+        put: operations["setPrimary"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/products/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a product
+         * @description Updates a product using a `multipart/form-data` request with two parts:
+         *
+         *     - `data` (required): JSON object with the product fields
+         *       (content type `application/json`).
+         *     - `images` (optional): one or more image files.
+         *
+         *     If no new images are provided, the existing images are preserved.
+         *     Updating the name regenerates the product slug.
          */
         put: operations["updateProduct"];
         post?: never;
         /**
-         * Delete product
-         * @description Soft-deletes a product by setting its `deletedAt` timestamp.
-         *     The product is no longer returned by catalog endpoints.
-         *     This operation is not reversible via the API.
+         * Delete a product
+         * @description Soft-deletes the product by setting its `deletedAt` timestamp.
+         *     The product record is retained in the database and is excluded
+         *     from catalog queries.
          */
         delete: operations["deleteProduct"];
         options?: never;
@@ -32,27 +79,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products": {
+    "/admin/banners/{bannerId}/items/{itemId}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        get?: never;
         /**
-         * List products
-         * @description Returns a paginated list of active products, optionally filtered by category.
-         *     Results are cached by `categoryId + page + size + sort`.
+         * Update a banner item
+         * @description Updates the content and visibility settings of a banner item.
+         *     The item's position and active status are not modified by this endpoint;
+         *     use the `position` and `status` endpoints for that.
          */
-        get: operations["getAllProducts"];
+        put: operations["updateBannerItem"];
+        post?: never;
+        /**
+         * Delete a banner item
+         * @description Removes the item from its banner and normalizes the positions
+         *     of the remaining items. Associated assets are scheduled for
+         *     deletion after the database transaction commits.
+         *     This operation cannot be undone.
+         */
+        delete: operations["deleteBannerItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         /**
-         * Create product
-         * @description Creates a new product and uploads the provided images to Cloudinary.
-         *     Uses `multipart/form-data` with two parts: `data` (JSON) and `images` (files).
-         *     Files and metadata are matched by index: `images[0]` → `data.images[0]`.
+         * Add an email address
+         * @description Adds a new email address to the authenticated user's account.
+         *
+         *     The email is created as unverified and a verification message
+         *     is sent to the provided address.
+         *
+         *     A user can have a maximum of three email addresses.
          */
-        post: operations["createProduct"];
+        post: operations["addEmail"];
         delete?: never;
         options?: never;
         head?: never;
@@ -72,8 +146,24 @@ export interface paths {
          * Receive Wompi webhook event
          * @description Public endpoint used exclusively by Wompi to notify transaction status updates.
          *     Secured via SHA-256 signature validation instead of JWT.
+         *
+         *     ## Processing
+         *
+         *     1. The signature of the event is validated. Invalid signatures are rejected with `401`.
+         *     2. Only `transaction.updated` events are processed.
+         *        Any other event type is acknowledged with `200` and ignored.
+         *     3. For `transaction.updated`, the payment status is updated accordingly.
+         *
+         *     ## Response
+         *
+         *     The response has no body: Wompi only needs the HTTP status code.
+         *
+         *     ## Not for Client Use
+         *
+         *     This endpoint is not meant to be called by the frontend.
+         *     To know the result of a payment, poll `GET /payments/orders/{orderId}`.
          */
-        post: operations["handleWebhook"];
+        post: operations["receiveWompiWebhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -109,6 +199,11 @@ export interface paths {
          *
          *     For PSE payments the response includes a `redirectUrl`.
          *     For `CARD` and `NEQUI`, `redirectUrl` is absent.
+         *
+         *     ## Next Step
+         *
+         *     Open the Wompi Checkout Widget with the returned `reference`, then poll
+         *     `GET /payments/orders/{orderId}` until a final status is reached.
          */
         post: operations["createPayment"];
         delete?: never;
@@ -132,8 +227,17 @@ export interface paths {
          *     |------|----------------|
          *     | `ADMIN` | All orders in the system |
          *     | `BUYER` | Only their own orders |
+         *
+         *     ## Filtering
+         *
+         *     The optional `status` parameter restricts the result to orders in that status.
+         *
+         *     ## Pagination
+         *
+         *     Pagination and sorting are controlled with the standard Spring Data
+         *     parameters: `page`, `size` and `sort`.
          */
-        get: operations["getAllOrders"];
+        get: operations["listOrders"];
         put?: never;
         /**
          * Create order
@@ -142,6 +246,7 @@ export interface paths {
          *     ## Stock Validation
          *
          *     For each item, stock is validated at creation time:
+         *
          *     - Products with `UNLIMITED` stock type skip validation.
          *     - Products with `AVAILABLE` or `MADE_TO_ORDER` stock must have enough units.
          *       If not, the entire request is rejected.
@@ -163,75 +268,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/categories": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get all categories
-         * @description Retrieves all categories currently available in the catalog.
-         *
-         *     ## Usage
-         *
-         *     Categories can be used to:
-         *
-         *     - Populate navigation menus
-         *     - Build category filters
-         *     - Organize products in the storefront
-         *
-         *     ## Ordering
-         *
-         *     Categories are returned according to the repository default ordering.
-         *
-         *     ## Authentication
-         *
-         *     This endpoint is public and does not require authentication.
-         */
-        get: operations["getAll"];
-        put?: never;
-        /**
-         * Create category
-         * @description Creates a new product category.
-         *
-         *     ## Authorization
-         *
-         *     Only users with the `ADMIN` role can create categories.
-         *
-         *     ## Slug Uniqueness
-         *
-         *     The provided slug must be unique across all existing categories.
-         *
-         *     Attempting to create a category using an already existing slug
-         *     results in a conflict response.
-         *
-         *     ## Catalog Impact
-         *
-         *     Newly created categories become immediately available
-         *     for product classification and catalog browsing.
-         *
-         *     ## Best Practices
-         *
-         *     Slugs should:
-         *
-         *     - Be lowercase
-         *     - Use hyphens instead of spaces
-         *     - Remain stable over time
-         *
-         *     Example:
-         *
-         *     - Name: `Home Decoration`
-         *     - Slug: `home-decoration`
-         */
-        post: operations["create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/auth/register": {
         parameters: {
             query?: never;
@@ -241,31 +277,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Register new account
-         * @description Creates a new user account and immediately returns
-         *     authenticated session tokens.
-         *
-         *     ## Default Role
-         *
-         *     Newly registered users are assigned the `BUYER` role.
-         *
-         *     Administrative accounts cannot be created through this endpoint.
-         *
-         *     ## Automatic Authentication
-         *
-         *     After registration:
-         *
-         *     - Access token is generated
-         *     - Refresh token is generated
-         *     - User is considered authenticated
-         *
-         *     No additional login request is required.
-         *
-         *     ## Email Uniqueness
-         *
-         *     Email addresses must be unique across all accounts.
-         */
         post: operations["register"];
         delete?: never;
         options?: never;
@@ -282,30 +293,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Refresh access token
-         * @description Generates a new authenticated session using a valid refresh token.
-         *
-         *     ## Token Rotation
-         *
-         *     Refresh tokens are single-use.
-         *
-         *     When a refresh succeeds:
-         *
-         *     - Previous refresh token is revoked
-         *     - New access token is issued
-         *     - New refresh token is issued
-         *
-         *     Clients must replace stored tokens with the newly returned values.
-         *
-         *     ## Security
-         *
-         *     Reusing an old refresh token is not allowed.
-         *
-         *     ## Account Restrictions
-         *
-         *     Refresh requests are rejected for banned users.
-         */
         post: operations["refresh"];
         delete?: never;
         options?: never;
@@ -322,26 +309,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Logout user
-         * @description Terminates the current authenticated session.
-         *
-         *     ## Session Revocation
-         *
-         *     The provided refresh token is validated and all active
-         *     refresh tokens belonging to the user are revoked.
-         *
-         *     After logout:
-         *
-         *     - Existing refresh tokens become unusable
-         *     - New access tokens cannot be generated
-         *
-         *     Users must authenticate again to create a new session.
-         *
-         *     ## Access Tokens
-         *
-         *     Previously issued access tokens remain valid until expiration.
-         */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -358,34 +325,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Authenticate user
-         * @description Authenticates a registered user using email and password credentials.
-         *
-         *     ## Successful Authentication
-         *
-         *     When authentication succeeds, the API returns:
-         *
-         *     - JWT access token
-         *     - Refresh token
-         *     - User role
-         *     - Token expiration time
-         *
-         *     ## Security
-         *
-         *     Passwords are validated against securely stored password hashes.
-         *
-         *     ## Rate Limiting
-         *
-         *     Failed login attempts are rate limited.
-         *
-         *     After too many failed attempts, authentication is temporarily
-         *     blocked for approximately 5 minutes.
-         *
-         *     ## Account Restrictions
-         *
-         *     Authentication is denied if the user account has been banned.
-         */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -393,7 +332,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/{id}/toggle": {
+    "/admin/products": {
         parameters: {
             query?: never;
             header?: never;
@@ -402,17 +341,145 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Create a product
+         * @description Creates a product using a `multipart/form-data` request with two parts:
+         *
+         *     - `data` (required): JSON object with the product fields
+         *       (content type `application/json`).
+         *     - `images` (optional): one or more image files.
+         *
+         *     The referenced category must exist.
+         */
+        post: operations["createProduct"];
         delete?: never;
         options?: never;
         head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         /**
-         * Toggle product visibility
-         * @description Flips the `isActive` flag of a product.
-         *     - `isActive: true` → visible in catalog
-         *     - `isActive: false` → hidden from buyers, not deleted
+         * Create a category
+         * @description Creates a product category.
+         *
+         *     - `name` and `slug` are required.
+         *     - `slug` must be unique across all categories; otherwise `409` is returned.
          */
-        patch: operations["toggleActive"];
+        post: operations["createCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/banners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all banners
+         * @description Returns all banners for administration purposes, including inactive
+         *     banners and their items. The public storefront uses a separate
+         *     endpoint that only exposes active content.
+         */
+        get: operations["getAllBanners"];
+        put?: never;
+        /**
+         * Create a banner
+         * @description Creates a banner with between 1 and 20 items.
+         *
+         *     Item fields are validated according to their visibility flags: when a
+         *     `show*` flag is enabled, the corresponding content field becomes required.
+         *     Images must be uploaded beforehand through `POST /admin/banners/uploads`.
+         */
+        post: operations["createBanner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/banners/{bannerId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an item to a banner
+         * @description Adds an item at the end of the banner's ordered items.
+         *     Use `POST /admin/banners/{bannerId}/items/{order}` to insert at a specific position.
+         */
+        post: operations["addBannerItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/banners/{bannerId}/items/{order}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Insert an item at a specific position
+         * @description Inserts a new item at the requested one-based position.
+         *
+         *     - The valid insertion range is 1 through the current item count plus one.
+         *     - Existing items are reordered as needed.
+         *     - A banner can hold at most 20 items.
+         */
+        post: operations["insertBannerItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/banners/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a banner image
+         * @description Uploads an image to Cloudinary and returns its secure URL and public ID.
+         *
+         *     - Supported formats: JPG, PNG, WEBP and GIF.
+         *     - Maximum file size: 5 MB.
+         *     - Send the image in the multipart part named `file`.
+         *
+         *     Use the returned `url` and `publicId` when creating or updating banner items.
+         */
+        post: operations["uploadBannerImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/orders/{id}/status": {
@@ -436,8 +503,11 @@ export interface paths {
          *     |------|--------------------|--------------|
          *     | `ADMIN` | Any `PAID` → `SHIPPED` | Order must be in `PAID` status |
          *     | `BUYER` | Own order `PENDING_PAYMENT` → `CANCELLED` | Order must be in `PENDING_PAYMENT` status |
+         *
+         *     Any other transition is rejected. Transitions driven by the payment flow
+         *     are performed by the system and cannot be requested here.
          */
-        patch: operations["updateStatus"];
+        patch: operations["updateOrderStatus"];
         trace?: never;
     };
     "/admin/users/{id}/unban": {
@@ -454,26 +524,9 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Unban user
-         * @description Restores access to a previously banned user account.
-         *
-         *     ## Purpose
-         *
-         *     Removes the banned flag from the specified user and restores the account
-         *     to its normal operational state.
-         *
-         *     ## Idempotency
-         *
-         *     Calling this endpoint multiple times for a user that is already active
-         *     produces the same final state.
-         *
-         *     ## Authorization
-         *
-         *     Only users with the `ADMIN` role can perform this action.
-         *
-         *     ## Audit Impact
-         *
-         *     User data is preserved. Only the moderation status is updated.
+         * Unban a user
+         * @description Removes the ban from the specified user so they can use the application again.
+         *     The operation is idempotent: unbanning a user who is not banned succeeds.
          */
         patch: operations["unbanUser"];
         trace?: never;
@@ -492,30 +545,154 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Ban user
-         * @description Restricts a user account by marking it as banned.
-         *
-         *     ## Purpose
-         *
-         *     This operation is intended for moderation and administrative actions.
-         *
-         *     Once banned, the user account is flagged internally and may lose access
-         *     to authenticated functionality depending on platform authorization rules.
-         *
-         *     ## Idempotency
-         *
-         *     Calling this endpoint multiple times for an already banned user
-         *     produces the same final state.
-         *
-         *     ## Authorization
-         *
-         *     Only users with the `ADMIN` role can perform this action.
-         *
-         *     ## Audit Impact
-         *
-         *     User data is preserved. Only the moderation status is updated.
+         * Ban a user
+         * @description Marks the specified user as banned, preventing them from using the application.
+         *     The operation is idempotent: banning an already banned user succeeds.
          */
         patch: operations["banUser"];
+        trace?: never;
+    };
+    "/admin/products/{id}/toggle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Toggle product visibility
+         * @description Switches the product's `isActive` value to its opposite and returns
+         *     the updated product. This operation is **not** idempotent: each call
+         *     flips the current state.
+         */
+        patch: operations["toggleProductActive"];
+        trace?: never;
+    };
+    "/admin/banners/{bannerId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update banner status
+         * @description Activates or deactivates the specified banner. Inactive banners are
+         *     kept in the database but are not shown in the storefront.
+         */
+        patch: operations["updateBannerStatus"];
+        trace?: never;
+    };
+    "/admin/banners/{bannerId}/items/{itemId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update banner item status
+         * @description Activates or deactivates a banner item. Inactive items keep their
+         *     position but are hidden from the storefront.
+         */
+        patch: operations["updateBannerItemStatus"];
+        trace?: never;
+    };
+    "/admin/banners/{bannerId}/items/{itemId}/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Move a banner item
+         * @description Moves an item to a new one-based position.
+         *     The new position must be between 1 and the total number of items;
+         *     the remaining items are reordered accordingly.
+         */
+        patch: operations["moveBannerItem"];
+        trace?: never;
+    };
+    "/user/emails/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Verify an email address
+         * @description Verifies ownership of an email address using the token
+         *     received by email.
+         *
+         *     This endpoint is public because the user may not yet have
+         *     an authenticated session when following the verification link.
+         */
+        get: operations["verifyEmail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List products
+         * @description Returns a paginated list of active products, optionally filtered by category.
+         *
+         *     ## Filtering
+         *
+         *     The optional `categoryId` parameter restricts the result to a single category.
+         *
+         *     ## Pagination
+         *
+         *     Pagination and sorting are controlled with the standard Spring Data
+         *     parameters: `page`, `size` and `sort`.
+         *
+         *     ## Caching
+         *
+         *     Results are cached by `categoryId + page + size + sort`.
+         */
+        get: operations["getAllProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/products/{slug}": {
@@ -528,9 +705,10 @@ export interface paths {
         /**
          * Get product by slug
          * @description Returns a single product identified by its URL-friendly slug.
+         *
          *     Example: `"Handmade Ceramic Mug"` → `"handmade-ceramic-mug"`.
          */
-        get: operations["getBySlug"];
+        get: operations["getProductBySlug"];
         put?: never;
         post?: never;
         delete?: never;
@@ -574,7 +752,7 @@ export interface paths {
          *     - `ADMIN` can retrieve any order.
          *     - `BUYER` can only retrieve their own orders.
          */
-        get: operations["getById"];
+        get: operations["getOrderById"];
         put?: never;
         post?: never;
         delete?: never;
@@ -606,6 +784,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get all categories
+         * @description Retrieves all categories currently available in the catalog.
+         *
+         *     ## Usage
+         *
+         *     Categories can be used to:
+         *
+         *     - Populate navigation menus
+         *     - Build category filters
+         *     - Organize products in the storefront
+         *
+         *     ## Ordering
+         *
+         *     Categories are returned according to the repository default ordering.
+         *
+         *     ## Authentication
+         *
+         *     This endpoint is public and does not require authentication.
+         */
+        get: operations["getAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/banners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List active banners
+         * @description Retrieves the banners that are currently active.
+         *
+         *     ## Access
+         *
+         *     This endpoint is public and does not require authentication.
+         *
+         *     ## Result
+         *
+         *     - Only active banners are returned.
+         *     - When there are no active banners, the endpoint still responds
+         *       with `200` and an empty `data` list.
+         */
+        get: operations["getActiveBanners"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List users
+         * @description Returns a paginated list of users.
+         *
+         *     - Page numbering starts at zero.
+         *     - Page size must be between 1 and 100.
+         *     - The response follows the Spring Data `Page` structure.
+         */
+        get: operations["listUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/stats": {
         parameters: {
             query?: never;
@@ -617,9 +885,13 @@ export interface paths {
          * Get dashboard statistics
          * @description Returns the main metrics displayed in the administrative dashboard.
          *
+         *     ## Access
+         *
+         *     Restricted to users with the `ADMIN` role.
+         *
          *     ## Sales Calculation
          *
-         *     `totalSalesThisMonth` includes all sales generated since the first day
+         *     `totalSalesThisMonth` includes all paid sales generated since the first day
          *     of the current UTC month.
          *
          *     ## Pending Orders
@@ -636,10 +908,55 @@ export interface paths {
          *
          *     If no products have been sold yet, `topSellingProduct` is returned as `null`.
          */
-        get: operations["getStats"];
+        get: operations["getDashboardStats"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/emails/{emailId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove an email address
+         * @description Removes a secondary email address from the authenticated
+         *     user's account.
+         *
+         *     The primary email cannot be removed.
+         */
+        delete: operations["removeEmail"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/banners/{bannerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a banner
+         * @description Deletes the specified banner and all its items. Associated assets are
+         *     scheduled for deletion from Cloudinary after the database transaction
+         *     commits. This operation cannot be undone.
+         */
+        delete: operations["deleteBanner"];
         options?: never;
         head?: never;
         patch?: never;
@@ -649,7 +966,40 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @description Represents an image associated with a product */
+        /** @description Request used to update the authenticated user's profile */
+        UpdateUserProfileRequest: {
+            /**
+             * @description Updated first name
+             * @example Geronimo
+             */
+            firstName?: string;
+            /**
+             * @description Updated last name
+             * @example Rodriguez
+             */
+            lastName?: string;
+            /**
+             * @description Updated profile image URL
+             * @example https://res.cloudinary.com/example/image/upload/profile.jpg
+             */
+            profileImageUrl?: string;
+        };
+        /** @description Standard API response wrapper used for all endpoints */
+        ApiResponse: {
+            /**
+             * @description Indicates whether the request was successful
+             * @example true
+             */
+            success: boolean;
+            /**
+             * @description Human-readable message describing the result
+             * @example Product created successfully
+             */
+            message: string;
+            /** @description Response payload containing requested data */
+            data?: unknown;
+        };
+        /** @description Metadata of an image associated with a product */
         ProductImageRequest: {
             /**
              * @description Indicates whether this image is the main (primary) product image
@@ -663,7 +1013,7 @@ export interface components {
              */
             sortOrder?: number;
         };
-        /** @description Product data as JSON */
+        /** @description Product fields as a JSON object (multipart part `data`) */
         ProductRequest: {
             /**
              * Format: uuid
@@ -671,15 +1021,28 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             categoryId: string;
-            /** @example Handmade Ceramic Mug */
+            /**
+             * @description Product name. The slug is generated from it.
+             * @example Handmade Ceramic Mug
+             */
             name: string;
-            /** @example Beautiful handmade mug */
+            /**
+             * @description Short product description
+             * @example Beautiful handmade mug
+             */
             description?: string;
-            /** @example Crafted by local artisans... */
+            /**
+             * @description Story behind the product
+             * @example Crafted by local artisans...
+             */
             story?: string;
-            /** @example 49.99 */
+            /**
+             * @description Unit price. Must be greater than zero.
+             * @example 49.99
+             */
             price: number;
             /**
+             * @description Stock handling strategy
              * @example AVAILABLE
              * @enum {string}
              */
@@ -690,17 +1053,24 @@ export interface components {
              * @example 10
              */
             stockQuantity?: number;
-            /** @example false */
+            /**
+             * @description Whether the product is a custom order
+             * @example false
+             */
             isCustomOrder: boolean;
-            /** @example true */
+            /**
+             * @description Whether the product is visible in the catalog
+             * @example true
+             */
             isActive: boolean;
+            /** @description Metadata of the product images, coordinated by index with the uploaded files */
             images?: components["schemas"]["ProductImageRequest"][];
         };
         /**
-         * @description Represents an image associated with a product returned by the API
+         * @description Represents an image associated with a product
          * @example {
          *       "id": "550e8400-e29b-41d4-a716-446655440001",
-         *       "url": "https://res.cloudinary.com/artelier/image/upload/v1712345678/products/mug.jpg",
+         *       "url": "https://res.cloudinary.com/artelier/image/upload/products/mug.jpg",
          *       "cloudinaryId": "products/mug_abc123",
          *       "isPrimary": true,
          *       "sortOrder": 0
@@ -712,25 +1082,25 @@ export interface components {
              * @description Unique identifier of the product image
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
-            id?: string;
+            id: string;
             /**
              * @description Public URL of the image
-             * @example https://res.cloudinary.com/artelier/image/upload/v1712345678/products/mug.jpg
+             * @example https://res.cloudinary.com/artelier/image/upload/products/mug.jpg
              */
-            url?: string;
+            url: string;
             /**
              * @description Cloudinary public ID used to manage the image
              * @example products/mug_abc123
              */
             cloudinaryId?: string;
             /**
-             * @description Indicates whether this image is the primary product image
+             * @description Indicates whether this is the primary product image
              * @example true
              */
-            isPrimary?: boolean;
+            isPrimary: boolean;
             /**
              * Format: int32
-             * @description Display order of the image (lower values appear first)
+             * @description Display order of the image
              * @example 0
              */
             sortOrder?: number;
@@ -750,17 +1120,17 @@ export interface components {
              * @description Unique identifier of the category
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            id?: string;
+            id: string;
             /**
              * @description Display name of the category
              * @example Ceramics
              */
-            name?: string;
+            name: string;
             /**
              * @description URL-friendly identifier used in routes
              * @example ceramics
              */
-            slug?: string;
+            slug: string;
             /**
              * @description Optional description explaining the category
              * @example Handmade ceramic products including mugs and bowls
@@ -768,7 +1138,7 @@ export interface components {
             description?: string;
         };
         /**
-         * @description Represents a product returned by the API, including category and images
+         * @description Product response including category and images
          * @example {
          *       "id": "550e8400-e29b-41d4-a716-446655440000",
          *       "category": {
@@ -780,22 +1150,14 @@ export interface components {
          *       "name": "Handmade Ceramic Mug",
          *       "slug": "handmade-ceramic-mug",
          *       "description": "Beautiful handmade ceramic mug",
-         *       "story": "Crafted by local artisans using traditional techniques",
+         *       "story": "Crafted by local artisans",
          *       "price": 49.99,
-         *       "stockType": "FINITE",
+         *       "stockType": "AVAILABLE",
          *       "stockQuantity": 10,
          *       "isCustomOrder": false,
          *       "isActive": true,
          *       "createdAt": "2026-01-15T10:30:00Z",
-         *       "images": [
-         *         {
-         *           "id": "550e8400-e29b-41d4-a716-446655440001",
-         *           "url": "https://res.cloudinary.com/artelier/image/upload/v1712345678/products/mug.jpg",
-         *           "cloudinaryId": "products/mug_abc123",
-         *           "isPrimary": true,
-         *           "sortOrder": 0
-         *         }
-         *       ]
+         *       "images": []
          *     }
          */
         ProductResponse: {
@@ -804,19 +1166,19 @@ export interface components {
              * @description Unique identifier of the product
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            id?: string;
-            /** @description Category to which the product belongs */
-            category?: components["schemas"]["CategoryResponse"];
+            id: string;
+            /** @description Product category */
+            category: components["schemas"]["CategoryResponse"];
             /**
              * @description Product display name
              * @example Handmade Ceramic Mug
              */
-            name?: string;
+            name: string;
             /**
              * @description SEO-friendly slug used in URLs
              * @example handmade-ceramic-mug
              */
-            slug?: string;
+            slug: string;
             /**
              * @description Short product description
              * @example Beautiful handmade ceramic mug
@@ -824,100 +1186,241 @@ export interface components {
             description?: string;
             /**
              * @description Optional story or background about the product
-             * @example Crafted by local artisans using traditional techniques
+             * @example Crafted by local artisans
              */
             story?: string;
             /**
              * @description Product price
              * @example 49.99
              */
-            price?: number;
+            price: number;
             /**
              * @description Defines how stock is handled
              * @enum {string}
              */
-            stockType?: "UNLIMITED" | "AVAILABLE" | "MADE_TO_ORDER";
+            stockType: "UNLIMITED" | "AVAILABLE" | "MADE_TO_ORDER";
             /**
              * Format: int32
-             * @description Available stock quantity. Relevant only for AVAILABLE and MADE_TO_ORDER stock types
+             * @description Available stock quantity; relevant for AVAILABLE and MADE_TO_ORDER
              * @example 10
              */
             stockQuantity?: number;
             /**
-             * @description Indicates whether the product supports custom orders
+             * @description Whether the product supports custom orders
              * @example false
              */
-            isCustomOrder?: boolean;
+            isCustomOrder: boolean;
             /**
-             * @description Indicates whether the product is active and visible
+             * @description Whether the product is active and visible
              * @example true
              */
-            isActive?: boolean;
+            isActive: boolean;
             /**
              * Format: date-time
              * @description Timestamp when the product was created
              * @example 2026-01-15T10:30:00Z
              */
-            createdAt?: string;
-            /** @description List of images associated with the product */
-            images?: components["schemas"]["ProductImageResponse"][];
+            createdAt: string;
+            /** @description Images associated with the product */
+            images: components["schemas"]["ProductImageResponse"][];
         };
         ProductResponseBody: {
             /**
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["ProductResponse"];
         };
-        /** @description Standard API response wrapper used for all endpoints */
-        ApiResponse: {
+        /** @description Update payload for a single item of a banner */
+        ItemBannerUpdateRequest: {
+            /**
+             * @description Title text. Required when showTitle is true.
+             * @example Handmade Ceramics
+             */
+            title?: string;
+            /**
+             * @description Whether the title is displayed
+             * @example true
+             */
+            showTitle?: boolean;
+            /**
+             * @description URL of the background image. At least one of backgroundImageUrl or model3dUrl is required.
+             * @example https://res.cloudinary.com/demo/image/upload/banner.jpg
+             */
+            backgroundImageUrl?: string;
+            /**
+             * @description Cloudinary public identifier of the background image
+             * @example artelier/banners/banner
+             */
+            backgroundImageCloudinaryId?: string;
+            /**
+             * @description URL of the 3D model. At least one of backgroundImageUrl or model3dUrl is required.
+             * @example https://res.cloudinary.com/demo/raw/upload/model.glb
+             */
+            model3dUrl?: string;
+            /**
+             * @description Cloudinary public identifier of the 3D model
+             * @example artelier/banners/model
+             */
+            model3dPublicId?: string;
+            /**
+             * @description Description text. Required when showDescription is true.
+             * @example Pieces crafted by local artisans
+             */
+            description?: string;
+            /**
+             * @description Whether the description is displayed
+             * @example true
+             */
+            showDescription?: boolean;
+            /**
+             * @description Button label. Required when showButton is true.
+             * @example Shop now
+             */
+            buttonLabel?: string;
+            /**
+             * @description Button target URL. Required when showButton is true.
+             * @example https://artelier-web.vercel.app/products
+             */
+            buttonUrl?: string;
+            /**
+             * @description Whether the button is displayed
+             * @example true
+             */
+            showButton?: boolean;
+        };
+        /** @description A single item of a banner */
+        ItemBannerResponse: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the item
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
+            id: string;
+            /**
+             * @description Whether the item is active
+             * @example true
+             */
+            isActive: boolean;
+            /**
+             * Format: int32
+             * @description Position of the item inside the banner, starting at 1
+             * @example 1
+             */
+            sortOrder: number;
+            /**
+             * @description Title text
+             * @example Handmade Ceramics
+             */
+            title?: string;
+            /**
+             * @description Whether the title is displayed
+             * @example true
+             */
+            showTitle: boolean;
+            /**
+             * @description URL of the background image
+             * @example https://res.cloudinary.com/demo/image/upload/banner.jpg
+             */
+            backgroundImageUrl?: string;
+            /**
+             * @description Cloudinary public identifier of the background image
+             * @example artelier/banners/banner
+             */
+            backgroundImageCloudinaryId?: string;
+            /**
+             * @description URL of the 3D model
+             * @example https://res.cloudinary.com/demo/raw/upload/model.glb
+             */
+            model3dUrl?: string;
+            /**
+             * @description Cloudinary public identifier of the 3D model
+             * @example artelier/banners/model
+             */
+            model3dPublicId?: string;
+            /**
+             * @description Description text
+             * @example Pieces crafted by local artisans
+             */
+            description?: string;
+            /**
+             * @description Whether the description is displayed
+             * @example true
+             */
+            showDescription: boolean;
+            /**
+             * @description Button label
+             * @example Shop now
+             */
+            buttonLabel?: string;
+            /**
+             * @description Button target URL
+             * @example https://artelier-web.vercel.app/products
+             */
+            buttonUrl?: string;
+            /**
+             * @description Whether the button is displayed
+             * @example true
+             */
+            showButton: boolean;
+        };
+        ItemBannerResponseBody: {
             /**
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
-            data?: unknown;
+            message: string;
+            /** @description Response payload containing requested data */
+            data?: components["schemas"]["ItemBannerResponse"];
         };
-        /** @description Webhook payload recibido desde Wompi cuando cambia el estado de una transacción */
+        /** @description Request used to add an email address to the authenticated user's account */
+        AddUserEmailRequest: {
+            /**
+             * Format: email
+             * @description Email address to add to the account. Must be globally unique.
+             * @example secondary@example.com
+             */
+            email: string;
+        };
+        /** @description Webhook payload received from Wompi when the state of a transaction changes */
         PaymentWebhookRequest: {
             /**
-             * @description Tipo de evento de Wompi
+             * @description Wompi event type. Only transaction.updated is processed.
              * @example transaction.updated
              */
             event?: string;
-            /** @description Wrapper del payload de la transacción */
+            /** @description Wrapper of the transaction payload */
             data?: components["schemas"]["TransactionData"];
-            /** @description Datos de firma para validar autenticidad del webhook */
+            /** @description Signature data used to validate the authenticity of the webhook */
             signature?: components["schemas"]["SignatureData"];
             /**
              * Format: int64
-             * @description Unix timestamp del evento en milisegundos
+             * @description Unix timestamp of the event, as sent by Wompi
              * @example 1715000000000
              */
             timestamp?: number;
         };
-        /** @description Bloque de firma HMAC para verificar autenticidad del webhook */
+        /** @description Signature block used to verify the authenticity of the webhook */
         SignatureData: {
             /**
-             * @description Checksum SHA-256 generado por Wompi
+             * @description SHA-256 checksum generated by Wompi
              * @example a3f5c9d8e1b2...
              */
             checksum?: string;
             /**
-             * @description Lista de propiedades usadas para generar la firma
+             * @description Transaction properties used to generate the checksum
              * @example [
              *       "transaction.id",
              *       "transaction.status",
@@ -926,40 +1429,40 @@ export interface components {
              */
             properties?: string[];
         };
-        /** @description Datos de la transacción de Wompi */
+        /** @description Wompi transaction data */
         Transaction: {
             /**
-             * @description ID único de la transacción en Wompi
+             * @description Unique transaction ID in Wompi
              * @example 1292-1602113476-10985
              */
             id?: string;
             /**
-             * @description Referencia del comercio
+             * @description Merchant reference
              * @example ORDER-550e8400-1715000000000
              */
             reference?: string;
             /**
-             * @description Estado de la transacción
+             * @description Transaction status
              * @example APPROVED
              * @enum {string}
              */
             status?: "PENDING" | "APPROVED" | "DECLINED" | "VOIDED" | "ERROR";
             /**
-             * @description Método de pago usado por el cliente
+             * @description Payment method used by the customer
              * @example NEQUI
              * @enum {string}
              */
             payment_method_type?: "CARD" | "NEQUI" | "PSE" | "BANCOLOMBIA_TRANSFER" | "BANCOLOMBIA_QR";
             /**
              * Format: int64
-             * @description Monto en centavos
+             * @description Amount in cents
              * @example 100000
              */
             amount_in_cents?: number;
         };
-        /** @description Wrapper de la transacción */
+        /** @description Wrapper of the transaction */
         TransactionData: {
-            /** @description Detalle de la transacción */
+            /** @description Transaction detail */
             transaction?: components["schemas"]["Transaction"];
         };
         /** @description Credit or debit card payment. */
@@ -987,11 +1490,17 @@ export interface components {
              */
             type: "CARD";
         };
-        /** @description Customer personal data. */
+        /** @description Customer personal data */
         CustomerData: {
-            /** @example María García */
+            /**
+             * @description Full name of the customer
+             * @example María García
+             */
             full_name?: string;
-            /** @example +573001112233 */
+            /**
+             * @description Phone number of the customer, including country code
+             * @example +573001112233
+             */
             phone_number?: string;
         };
         /** @description Nequi payment. */
@@ -1017,9 +1526,9 @@ export interface components {
         PaymentMethodBody: {
             type: string;
         };
-        /** @description Request to initiate a payment for an order. */
+        /** @description Request to initiate a payment for an order */
         PaymentRequest: {
-            /** @description Payment method chosen by the customer. */
+            /** @description Payment method chosen by the customer */
             payment_method: components["schemas"]["CardPaymentMethod"] | components["schemas"]["NequiPaymentMethod"] | components["schemas"]["PsePaymentMethod"];
             /** @description Optional customer info (name, phone). Required for PSE. */
             customer_data?: components["schemas"]["CustomerData"];
@@ -1079,37 +1588,53 @@ export interface components {
              */
             type: "PSE";
         };
-        /** @description Payment response payload. */
+        /** @description Payment response payload */
         PaymentResponse: {
             /**
              * Format: uuid
+             * @description Unique identifier of the payment
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            id?: string;
+            id: string;
             /**
              * Format: uuid
-             * @example 550e8400-e29b-41d4-a716-446655440000
+             * @description Identifier of the order being paid
+             * @example 660e8400-e29b-41d4-a716-446655440001
              */
-            orderId?: string;
-            /** @example 1292-1602113476-10985 */
-            wompiTransactionId?: string;
-            /** @example ORDER-550e8400-1715000000000 */
-            reference?: string;
+            orderId: string;
             /**
-             * @description Current payment status.
+             * @description Transaction identifier assigned by Wompi
+             * @example 1292-1602113476-10985
+             */
+            wompiTransactionId?: string;
+            /**
+             * @description Merchant reference used to correlate the Wompi transaction
+             * @example ORDER-550e8400-1715000000000
+             */
+            reference: string;
+            /**
+             * @description Current payment status
              * @enum {string}
              */
-            status?: "PENDING" | "APPROVED" | "DECLINED" | "VOIDED" | "ERROR";
-            /** @example 120000.00 */
-            amount?: number;
+            status: "PENDING" | "APPROVED" | "DECLINED" | "VOIDED" | "ERROR";
             /**
+             * @description Payment amount
+             * @example 120000.00
+             */
+            amount: number;
+            /**
+             * @description Payment method used by the customer
              * @example NEQUI
              * @enum {string}
              */
             paymentMethod?: "CARD" | "NEQUI" | "PSE";
-            /** @description Redirect URL for PSE or Bancolombia. Frontend must redirect user here. */
+            /** @description Redirect URL for PSE or Bancolombia */
             redirectUrl?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Timestamp when the payment was confirmed
+             * @example 2026-05-07T00:00:00Z
+             */
             paidAt?: string;
         };
         PaymentResponseBody: {
@@ -1117,13 +1642,13 @@ export interface components {
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["PaymentResponse"];
         };
         /** @description Single item inside an order */
@@ -1136,19 +1661,19 @@ export interface components {
             productId: string;
             /**
              * Format: int32
-             * @description Quantity of the product
+             * @description Quantity of the product. Must be at least 1.
              * @example 2
              */
-            quantity?: number;
+            quantity: number;
             /**
              * @description Optional customization notes for this item
-             * @example No onions, extra cheese
+             * @example Gift wrap this one
              */
             customNotes?: string;
         };
         /** @description Request payload for creating a new order */
         OrderRequest: {
-            /** @description List of items included in the order */
+            /** @description List of items included in the order. At least one item is required. */
             items: components["schemas"]["OrderItemRequest"][];
             /**
              * @description Shipping address for the order
@@ -1198,28 +1723,28 @@ export interface components {
              * @description Order UUID
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            id?: string;
+            id: string;
             /**
              * @description Current status of the order
              * @example PENDING_PAYMENT
              * @enum {string}
              */
-            status?: "PENDING_PAYMENT" | "PAID" | "PROCESSING" | "SHIPPED" | "CANCELLED";
+            status: "PENDING_PAYMENT" | "PAID" | "PROCESSING" | "SHIPPED" | "CANCELLED";
             /**
              * @description Subtotal amount
              * @example 59.98
              */
-            subtotal?: number;
+            subtotal: number;
             /**
-             * @description Total amount (including taxes, shipping, etc.)
+             * @description Total amount including taxes and shipping
              * @example 59.98
              */
-            total?: number;
+            total: number;
             /**
              * @description Shipping address
              * @example Cra 123 #45-67, Bogotá, Colombia
              */
-            shippingAddress?: string;
+            shippingAddress: string;
             /**
              * @description Optional notes
              * @example Leave at the door
@@ -1230,23 +1755,85 @@ export interface components {
              * @description Order creation timestamp
              * @example 2026-05-04T15:30:00Z
              */
-            createdAt?: string;
+            createdAt: string;
             /** @description List of items in the order */
-            items?: components["schemas"]["OrderItemResponse"][];
+            items: components["schemas"]["OrderItemResponse"][];
         };
         OrderResponseBody: {
             /**
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["OrderResponse"];
+        };
+        /** @description User registration request */
+        RegisterRequest: {
+            /**
+             * @description Unique username. ASCII characters only, without spaces.
+             * @example Geronimo01
+             */
+            username: string;
+            /**
+             * Format: password
+             * @description Account password
+             * @example StrongPass123
+             */
+            password: string;
+            /**
+             * @description User first name
+             * @example Geronimo
+             */
+            firstName: string;
+            /**
+             * @description User last name
+             * @example Rodriguez
+             */
+            lastName: string;
+            /**
+             * Format: email
+             * @description Primary email address. Must be unique.
+             * @example user@example.com
+             */
+            email: string;
+            /**
+             * @description Phone country calling code
+             * @example +57
+             */
+            phoneCountryCode: string;
+            /**
+             * @description Phone number without country calling code
+             * @example 3001234567
+             */
+            phoneNumber: string;
+        };
+        /** @description Request used to refresh an authentication session */
+        RefreshTokenRequest: {
+            /**
+             * @description Valid refresh token issued during authentication
+             * @example eyJhbGciOiJIUzI1NiJ9.refreshTokenExample
+             */
+            refreshToken: string;
+        };
+        /** @description User login credentials */
+        LoginRequest: {
+            /**
+             * @description Username or verified email address
+             * @example Geronimo01
+             */
+            identifier: string;
+            /**
+             * Format: password
+             * @description Account password
+             * @example StrongPass123
+             */
+            password: string;
         };
         /** @description Category creation request */
         CategoryRequest: {
@@ -1271,89 +1858,168 @@ export interface components {
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["CategoryResponse"];
         };
-        /** @description User registration request */
-        RegisterRequest: {
+        /** @description Request payload that defines a banner and the items that compose it */
+        BannerRequest: {
             /**
-             * Format: email
-             * @example user@example.com
+             * @description Whether the banner is active. Optional.
+             * @example true
              */
-            email: string;
-            /** @example StrongPass123 */
-            password: string;
-            /** @example John Doe */
-            fullName: string;
-            /** @example +573001234567 */
-            phone?: string;
+            isActive?: boolean;
+            /** @description Items that compose the banner. Between 1 and 20 items are allowed. */
+            items: components["schemas"]["ItemBannerRequest"][];
         };
-        /** @description Response returned after successful authentication containing JWT tokens and session metadata */
-        AuthResponse: {
+        /** @description A single item of a banner */
+        ItemBannerRequest: {
             /**
-             * @description JWT access token used to authenticate API requests
-             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.accessTokenExample123456789
+             * Format: int32
+             * @description Position of the item inside the banner, starting at 1
+             * @example 1
              */
-            token?: string;
+            sortOrder?: number;
             /**
-             * @description User role assigned to the authenticated user
-             * @example BUYER
-             * @enum {string}
+             * @description Title text. Required when showTitle is true.
+             * @example Handmade Ceramics
              */
-            role?: "ADMIN" | "BUYER";
+            title?: string;
             /**
-             * @description Refresh token used to obtain new access tokens without re-authentication
-             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refreshTokenExample987654321
+             * @description Whether the title is displayed
+             * @example true
              */
-            refreshToken?: string;
+            showTitle?: boolean;
             /**
-             * Format: int64
-             * @description Access token expiration time in seconds
-             * @example 3600
+             * @description URL of the background image. At least one of backgroundImageUrl or model3dUrl is required.
+             * @example https://res.cloudinary.com/demo/image/upload/banner.jpg
              */
-            expiresIn?: number;
+            backgroundImageUrl?: string;
+            /**
+             * @description Cloudinary public identifier of the background image
+             * @example artelier/banners/banner
+             */
+            backgroundImageCloudinaryId?: string;
+            /**
+             * @description URL of the 3D model. At least one of backgroundImageUrl or model3dUrl is required.
+             * @example https://res.cloudinary.com/demo/raw/upload/model.glb
+             */
+            model3dUrl?: string;
+            /**
+             * @description Cloudinary public identifier of the 3D model
+             * @example artelier/banners/model
+             */
+            model3dPublicId?: string;
+            /**
+             * @description Description text. Required when showDescription is true.
+             * @example Pieces crafted by local artisans
+             */
+            description?: string;
+            /**
+             * @description Whether the description is displayed
+             * @example true
+             */
+            showDescription?: boolean;
+            /**
+             * @description Button label. Required when showButton is true.
+             * @example Shop now
+             */
+            buttonLabel?: string;
+            /**
+             * @description Button target URL. Required when showButton is true.
+             * @example https://artelier-web.vercel.app/products
+             */
+            buttonUrl?: string;
+            /**
+             * @description Whether the button is displayed
+             * @example true
+             */
+            showButton?: boolean;
         };
-        AuthResponseBody: {
+        /** @description A banner together with its items */
+        BannerResponse: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the banner
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description Whether the banner is active
+             * @example true
+             */
+            isActive: boolean;
+            /**
+             * Format: date-time
+             * @description Timestamp when the banner was created
+             * @example 2026-01-15T10:30:00Z
+             */
+            createdAt: string;
+            /** @description Items that compose the banner */
+            items: components["schemas"]["ItemBannerResponse"][];
+        };
+        BannerResponseBody: {
             /**
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
-            data?: components["schemas"]["AuthResponse"];
+            message: string;
+            /** @description Response payload containing requested data */
+            data?: components["schemas"]["BannerResponse"];
         };
-        /** @description Request used to obtain a new JWT access token using a valid refresh token */
-        RefreshRequest: {
+        /** @description Result of uploading an asset to Cloudinary */
+        UploadedAssetResponse: {
             /**
-             * @description Valid refresh token issued during login or previous refresh
-             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refreshTokenExample1234567890
+             * @description Public URL of the uploaded asset
+             * @example https://res.cloudinary.com/artelier/image/upload/banners/banner.jpg
              */
-            refreshToken: string;
+            url: string;
+            /**
+             * @description Cloudinary public identifier used to manage or delete the asset
+             * @example banners/banner
+             */
+            publicId: string;
         };
-        /** @description Login credentials */
-        LoginRequest: {
+        UploadedAssetResponseBody: {
             /**
-             * Format: email
-             * @description User email
-             * @example user@example.com
+             * @description Indicates whether the request was successful
+             * @example true
              */
-            email: string;
+            success: boolean;
             /**
-             * @description User password
-             * @example StrongPass123
+             * @description Human-readable message describing the result
+             * @example Product created successfully
              */
-            password: string;
+            message: string;
+            /** @description Response payload containing requested data */
+            data?: components["schemas"]["UploadedAssetResponse"];
+        };
+        /** @description Request payload to activate or deactivate a resource */
+        StatusRequest: {
+            /**
+             * @description true to activate the resource, false to deactivate it
+             * @example true
+             */
+            isActive: boolean;
+        };
+        /** @description Request payload to move an element to a new position inside an ordered list */
+        PositionRequest: {
+            /**
+             * Format: int32
+             * @description New position of the element, starting at 1
+             * @example 2
+             */
+            newOrder: number;
         };
         PageProductResponse: {
             /** Format: int32 */
@@ -1389,13 +2055,13 @@ export interface components {
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["PageProductResponse"];
         };
         SortObject: {
@@ -1408,13 +2074,13 @@ export interface components {
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["WompiFinancialInstitutionsResponse"][];
         };
         WompiFinancialInstitutionsResponse: {
@@ -1426,13 +2092,13 @@ export interface components {
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["PageOrderResponse"];
         };
         PageOrderResponse: {
@@ -1458,13 +2124,13 @@ export interface components {
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["OrderResponse"][];
         };
         CategoryListResponseBody: {
@@ -1472,21 +2138,35 @@ export interface components {
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["CategoryResponse"][];
         };
+        /** @description Aggregated metrics displayed in the administrative dashboard */
         StatsResponse: {
-            totalSalesThisMonth?: number;
-            /** Format: int64 */
-            pendingOrders?: number;
-            /** Format: int64 */
-            activeProducts?: number;
+            /**
+             * @description Sum of paid sales generated during the current UTC month
+             * @example 12450.75
+             */
+            totalSalesThisMonth: number;
+            /**
+             * Format: int64
+             * @description Number of orders waiting for payment
+             * @example 8
+             */
+            pendingOrders: number;
+            /**
+             * Format: int64
+             * @description Number of products currently visible in the catalog
+             * @example 42
+             */
+            activeProducts: number;
+            /** @description Best-selling product, or null when no product has been sold */
             topSellingProduct?: components["schemas"]["TopProduct"];
         };
         StatsResponseBody: {
@@ -1494,21 +2174,48 @@ export interface components {
              * @description Indicates whether the request was successful
              * @example true
              */
-            success?: boolean;
+            success: boolean;
             /**
              * @description Human-readable message describing the result
              * @example Product created successfully
              */
-            message?: string;
-            /** @description Response payload containing requested data (nullable when no data is returned) */
+            message: string;
+            /** @description Response payload containing requested data */
             data?: components["schemas"]["StatsResponse"];
         };
+        /** @description Best-selling product summary */
         TopProduct: {
-            /** Format: uuid */
-            id?: string;
-            name?: string;
-            /** Format: int64 */
-            totalSold?: number;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the product
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description Product display name
+             * @example Handmade Ceramic Mug
+             */
+            name: string;
+            /**
+             * Format: int64
+             * @description Accumulated quantity sold
+             * @example 125
+             */
+            totalSold: number;
+        };
+        BannerListResponseBody: {
+            /**
+             * @description Indicates whether the request was successful
+             * @example true
+             */
+            success: boolean;
+            /**
+             * @description Human-readable message describing the result
+             * @example Product created successfully
+             */
+            message: string;
+            /** @description Response payload containing requested data */
+            data?: components["schemas"]["BannerResponse"][];
         };
     };
     responses: never;
@@ -1519,13 +2226,119 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    updateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    setPrimary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                emailId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Primary email updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description The request contains invalid data or the email cannot be used for this operation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description The requested email address does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
     updateProduct: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /**
-                 * @description Product UUID
+                 * @description UUID of the product to update
                  * @example 550e8400-e29b-41d4-a716-446655440000
                  */
                 id: string;
@@ -1536,13 +2349,13 @@ export interface operations {
             content: {
                 "multipart/form-data": {
                     data: components["schemas"]["ProductRequest"];
-                    /** @description Replacement image files. Omit to keep existing images. */
+                    /** @description Optional image files to associate with the product (multipart part `images`) */
                     images?: string[];
                 };
             };
         };
         responses: {
-            /** @description Product updated */
+            /** @description Product updated successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1551,34 +2364,31 @@ export interface operations {
                     "application/json": components["schemas"]["ProductResponseBody"];
                 };
             };
-            /** @description Not authenticated */
+            /** @description Invalid product data, malformed UUID or malformed multipart request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Unauthorized"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
+                    "*/*": components["schemas"]["ApiResponse"];
                 };
             };
-            /** @description ADMIN role required */
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Access Denied"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
+                    "*/*": components["schemas"]["ApiResponse"];
                 };
             };
             /** @description Product or category not found */
@@ -1587,22 +2397,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Product not found"
-                     *     }
-                     */
                     "application/json": components["schemas"]["ApiResponse"];
                 };
             };
-            /** @description Image upload to Cloudinary failed */
+            /** @description Unexpected server error or failure while uploading images */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponse"];
+                    "*/*": components["schemas"]["ApiResponse"];
                 };
             };
         };
@@ -1613,7 +2417,7 @@ export interface operations {
             header?: never;
             path: {
                 /**
-                 * @description Product UUID
+                 * @description UUID of the product to delete
                  * @example 550e8400-e29b-41d4-a716-446655440000
                  */
                 id: string;
@@ -1622,119 +2426,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Product deleted */
+            /** @description Product deleted successfully */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Unauthorized"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description ADMIN role required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Access Denied"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Product not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Product not found"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    getAllProducts: {
-        parameters: {
-            query?: {
-                /**
-                 * @description Filter by category UUID.
-                 * @example 660e8400-e29b-41d4-a716-446655440001
-                 */
-                categoryId?: string;
-                /** @description Zero-based page index (0..N) */
-                page?: number;
-                /** @description The size of the page to be returned */
-                size?: number;
-                /** @description Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported. */
-                sort?: string[];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Products retrieved */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductPageResponseBody"];
-                };
-            };
-        };
-    };
-    createProduct: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "multipart/form-data": {
-                    data: components["schemas"]["ProductRequest"];
-                    /** @description Product image files (coordinated by index with data.images) */
-                    images?: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description Product created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductResponseBody"];
-                };
-            };
-            /** @description Validation failed */
+            /** @description Malformed UUID in the request path */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -1743,52 +2442,259 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse"];
                 };
             };
-            /** @description Not authenticated */
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Unauthorized"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
+                content?: never;
             };
-            /** @description ADMIN role required */
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Access Denied"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
+                content?: never;
             };
-            /** @description Category not found */
+            /** @description Product not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateBannerItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the banner
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                bannerId: string;
+                /**
+                 * @description UUID of the item to update
+                 * @example 550e8400-e29b-41d4-a716-446655440001
+                 */
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /** @description New item data */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBannerUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Item updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBannerResponseBody"];
+                };
+            };
+            /** @description Invalid item data, validation failure or malformed UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Banner or banner item not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    deleteBannerItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the banner
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                bannerId: string;
+                /**
+                 * @description UUID of the item to delete
+                 * @example 550e8400-e29b-41d4-a716-446655440001
+                 */
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Item deleted successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed UUID in the request path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Banner or banner item not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    addEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddUserEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Email address added successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     /**
                      * @example {
-                     *       "success": false,
-                     *       "message": "Category not found"
+                     *       "success": true,
+                     *       "message": "Email added successfully",
+                     *       "data": {
+                     *         "id": "550e8400-e29b-41d4-a716-446655440000",
+                     *         "email": "secondary@example.com",
+                     *         "isPrimary": false,
+                     *         "isVerified": false,
+                     *         "verifiedAt": null
+                     *       }
                      *     }
                      */
                     "application/json": components["schemas"]["ApiResponse"];
                 };
             };
-            /** @description Image upload to Cloudinary failed */
+            /** @description The request contains invalid data or the email cannot be used for this operation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description The authenticated user is not allowed to perform this operation */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description The email is already registered or the user has reached the maximum number of emails */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -1799,20 +2705,21 @@ export interface operations {
             };
         };
     };
-    handleWebhook: {
+    receiveWompiWebhook: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        /** @description Event payload sent by Wompi */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PaymentWebhookRequest"];
             };
         };
         responses: {
-            /** @description Webhook event successfully received and processed */
+            /** @description Webhook event successfully received and processed (or ignored) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1866,19 +2773,40 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentResponseBody"];
                 };
             };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description The order belongs to another user */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
             /** @description No payment found for the specified order */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Payment not found for order"
-                     *     }
-                     */
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
                 };
             };
         };
@@ -1896,6 +2824,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Payment method and method-specific data */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PaymentRequest"];
@@ -1920,18 +2849,30 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse"];
                 };
             };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description The order belongs to another user */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
             /** @description Order not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Order not found"
-                     *     }
-                     */
                     "application/json": components["schemas"]["ApiResponse"];
                 };
             };
@@ -1946,7 +2887,7 @@ export interface operations {
             };
         };
     };
-    getAllOrders: {
+    listOrders: {
         parameters: {
             query?: {
                 /**
@@ -1976,19 +2917,31 @@ export interface operations {
                     "application/json": components["schemas"]["OrderPageResponseBody"];
                 };
             };
+            /** @description Invalid query parameter (for example, an unknown status value) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
             /** @description Not authenticated */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Unauthorized"
-                     *     }
-                     */
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
                 };
             };
         };
@@ -2031,13 +2984,1368 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Unauthorized"
-                     *     }
-                     */
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    createProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    data: components["schemas"]["ProductRequest"];
+                    /** @description Optional image files to associate with the product (multipart part `images`) */
+                    images?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Product created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductResponseBody"];
+                };
+            };
+            /** @description Invalid product data or malformed multipart request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Category not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error or failure while uploading images */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    createCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Category data */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryRequest"];
+            };
+        };
+        responses: {
+            /** @description Category created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryResponseBody"];
+                };
+            };
+            /** @description Invalid category data */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description The category slug is already in use */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    getAllBanners: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Banners retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerListResponseBody"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    createBanner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Banner data, including its items (1 to 20) */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BannerRequest"];
+            };
+        };
+        responses: {
+            /** @description Banner created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerResponseBody"];
+                };
+            };
+            /** @description Invalid banner data or validation failure */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    addBannerItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the banner
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                bannerId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Item data */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBannerRequest"];
+            };
+        };
+        responses: {
+            /** @description Item added successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBannerResponseBody"];
+                };
+            };
+            /** @description Invalid item data, validation failure or malformed UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Banner not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    insertBannerItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the banner
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                bannerId: string;
+                /**
+                 * @description One-based insertion position (1 to current item count + 1)
+                 * @example 1
+                 */
+                order: number;
+            };
+            cookie?: never;
+        };
+        /** @description Item data */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBannerRequest"];
+            };
+        };
+        responses: {
+            /** @description Item inserted successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBannerResponseBody"];
+                };
+            };
+            /** @description Invalid insertion position, item data or malformed UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Banner not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    uploadBannerImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description Image file (JPG, PNG, WEBP or GIF); maximum size 5 MB
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Image uploaded successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadedAssetResponseBody"];
+                };
+            };
+            /** @description Invalid image file */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error or failure while uploading to Cloudinary */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    updateOrderStatus: {
+        parameters: {
+            query: {
+                /** @description Target status */
+                status: "PENDING_PAYMENT" | "PAID" | "PROCESSING" | "SHIPPED" | "CANCELLED";
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description Order UUID
+                 * @example 770e8400-e29b-41d4-a716-446655440002
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Order status updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderResponseBody"];
+                };
+            };
+            /** @description Transition not allowed or invalid parameter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Buyer attempted to modify another user's order */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    unbanUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the user to unban
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User unbanned successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Malformed UUID in the request path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description User not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    banUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the user to ban
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User banned successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Malformed UUID in the request path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description User not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    toggleProductActive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the product
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product visibility updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductResponseBody"];
+                };
+            };
+            /** @description Malformed UUID in the request path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Product not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    updateBannerStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the banner
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                bannerId: string;
+            };
+            cookie?: never;
+        };
+        /** @description New activation state of the banner */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Banner status updated successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed banner UUID or invalid request body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Banner not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateBannerItemStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the banner
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                bannerId: string;
+                /**
+                 * @description UUID of the banner item
+                 * @example 550e8400-e29b-41d4-a716-446655440001
+                 */
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /** @description New activation state of the item */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Item status updated successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed UUID or invalid request body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Banner or banner item not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    moveBannerItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the banner
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                bannerId: string;
+                /**
+                 * @description UUID of the item to move
+                 * @example 550e8400-e29b-41d4-a716-446655440001
+                 */
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /** @description New one-based position of the item */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionRequest"];
+            };
+        };
+        responses: {
+            /** @description Item position updated successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed UUID, missing position or position out of range */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Banner or banner item not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    verifyEmail: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Email address verified successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description The verification token is invalid or expired */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description The requested email address does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    getAllProducts: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Filter by category UUID. Optional — omit to return all categories.
+                 * @example 660e8400-e29b-41d4-a716-446655440001
+                 */
+                categoryId?: string;
+                /** @description Zero-based page index (0..N) */
+                page?: number;
+                /** @description The size of the page to be returned */
+                size?: number;
+                /** @description Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported. */
+                sort?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Products retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductPageResponseBody"];
+                };
+            };
+            /** @description Invalid query parameter (for example, a malformed category UUID) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    getProductBySlug: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description URL-friendly product identifier
+                 * @example handmade-ceramic-mug
+                 */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product found */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductResponseBody"];
+                };
+            };
+            /** @description Product not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    getFinancialInstitutions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Financial institutions retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinancialInstitutionsResponseBody"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unable to retrieve financial institutions — Wompi error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    getOrderById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Order UUID
+                 * @example 770e8400-e29b-41d4-a716-446655440002
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Order found */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderResponseBody"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Buyer attempted to access another user's order */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    getMyOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Order history retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderListResponseBody"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
                 };
             };
         };
@@ -2071,496 +4379,7 @@ export interface operations {
             };
         };
     };
-    create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Category data */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CategoryRequest"];
-            };
-        };
-        responses: {
-            /** @description Category created successfully */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CategoryResponseBody"];
-                };
-            };
-            /** @description Access denied — ADMIN role required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Slug already in use */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    register: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRequest"];
-            };
-        };
-        responses: {
-            /** @description User registered successfully */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthResponseBody"];
-                };
-            };
-            /** @description Invalid registration data */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Email already in use */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    refresh: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RefreshRequest"];
-            };
-        };
-        responses: {
-            /** @description Token refreshed successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthResponseBody"];
-                };
-            };
-            /** @description Invalid or expired refresh token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description User account is banned */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    logout: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RefreshRequest"];
-            };
-        };
-        responses: {
-            /** @description Logout completed successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Invalid or expired refresh token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Login credentials */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Authentication successful */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthResponseBody"];
-                };
-            };
-            /** @description Too many failed login attempts */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Invalid credentials */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description User account is banned */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description User not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    toggleActive: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description Product UUID
-                 * @example 550e8400-e29b-41d4-a716-446655440000
-                 */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Visibility toggled */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductResponseBody"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Unauthorized"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description ADMIN role required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Access Denied"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Product not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Product not found"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    updateStatus: {
-        parameters: {
-            query: {
-                /** @description Target status */
-                status: "PENDING_PAYMENT" | "PAID" | "PROCESSING" | "SHIPPED" | "CANCELLED";
-            };
-            header?: never;
-            path: {
-                /**
-                 * @description Order UUID
-                 * @example 770e8400-e29b-41d4-a716-446655440002
-                 */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Order status updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrderResponseBody"];
-                };
-            };
-            /** @description Transition not allowed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Buyer attempted to modify another user's order */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Access denied to this order"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Order not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Order not found"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    unbanUser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description User UUID
-                 * @example 550e8400-e29b-41d4-a716-446655440000
-                 */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description User successfully restored */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Access denied — ADMIN role required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description User not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    banUser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description User UUID
-                 * @example 550e8400-e29b-41d4-a716-446655440000
-                 */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description User successfully marked as banned */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Access denied — ADMIN role required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description User not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    getBySlug: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description URL-friendly product identifier
-                 * @example handmade-ceramic-mug
-                 */
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Product found */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductResponseBody"];
-                };
-            };
-            /** @description Product not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Product not found"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    getFinancialInstitutions: {
+    getActiveBanners: {
         parameters: {
             query?: never;
             header?: never;
@@ -2569,16 +4388,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Financial institutions retrieved successfully */
+            /** @description Active banners retrieved successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FinancialInstitutionsResponseBody"];
+                    "application/json": components["schemas"]["ApiResponse"];
                 };
             };
-            /** @description Unable to retrieve financial institutions — Wompi error */
+            /** @description Unexpected server error */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -2589,98 +4408,74 @@ export interface operations {
             };
         };
     };
-    getById: {
+    listUsers: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
+            query?: {
                 /**
-                 * @description Order UUID
-                 * @example 770e8400-e29b-41d4-a716-446655440002
+                 * @description Zero-based page index; must not be negative
+                 * @example 0
                  */
-                id: string;
+                page?: number;
+                /**
+                 * @description Number of users per page; valid range: 1-100
+                 * @example 20
+                 */
+                size?: number;
             };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Order found */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrderResponseBody"];
-                };
-            };
-            /** @description Buyer attempted to access another user's order */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Access denied to this order"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Order not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Order not found"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-        };
-    };
-    getMyOrders: {
-        parameters: {
-            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Order history retrieved */
+            /** @description Users retrieved successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrderListResponseBody"];
+                    "application/json": unknown;
                 };
             };
-            /** @description Not authenticated */
+            /** @description Invalid pagination parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Unauthorized"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["ApiResponse"];
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
                 };
             };
         };
     };
-    getStats: {
+    getDashboardStats: {
         parameters: {
             query?: never;
             header?: never;
@@ -2704,29 +4499,137 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Unauthorized"
-                     *     }
-                     */
                     "application/json": components["schemas"]["ApiResponse"];
                 };
             };
-            /** @description Access denied - ADMIN role required */
+            /** @description Access denied — ADMIN role required */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "success": false,
-                     *       "message": "Access Denied"
-                     *     }
-                     */
                     "application/json": components["schemas"]["ApiResponse"];
                 };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponse"];
+                };
+            };
+        };
+    };
+    removeEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                emailId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Email address removed successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request contains invalid data or the email cannot be used for this operation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested email address does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteBanner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description UUID of the banner to delete
+                 * @example 550e8400-e29b-41d4-a716-446655440000
+                 */
+                bannerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Banner deleted successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed UUID in the request path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Authentication required: the Bearer token is missing, expired or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access denied: the authenticated user does not have the ADMIN role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Banner not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
