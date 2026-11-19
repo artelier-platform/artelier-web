@@ -1,6 +1,6 @@
 import { createBanner, getActiveBanners } from "@/server/banners/banners.service";
 import { getAuth, proxy, readFiles, readJsonPart } from "@/server/http";
-import type { BannerRequest } from "@/types/pending";
+import type { BannerRequest } from "@/types";
 
 export async function GET() {
     return proxy(() => getActiveBanners());

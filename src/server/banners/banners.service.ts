@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { buildMultipart } from "@/lib/http-helpers";
 import { bearer } from "@/server/http";
 import type { ApiResponse } from "@/types";
-import type { Banner, BannerRequest } from "@/types/pending";
+import type { Banner, BannerRequest } from "@/types";
 
 /** Público: solo activos, ordenados por sortOrder. Se usa desde el home (servidor). */
 export async function getActiveBanners(): Promise<ApiResponse<Banner[]>> {

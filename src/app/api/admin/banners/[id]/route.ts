@@ -1,6 +1,6 @@
 import { deleteBanner, updateBanner } from "@/server/banners/banners.service";
 import { getAuth, proxy, readFiles, readJsonPart } from "@/server/http";
-import type { BannerRequest } from "@/types/pending";
+import type { BannerRequest } from "@/types";
 
 type Params = { params: Promise<{ id: string }> };
 
