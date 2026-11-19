@@ -1,3 +1,5 @@
+// src/app/(protected)/account/layout.tsx
+
 import type { ReactNode } from "react";
 import ShopShell from "@/components/layout/ShopShell";
 

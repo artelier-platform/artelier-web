@@ -1,6 +1,6 @@
 // src/lib/auth-refresh.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { refreshSession } from "./auth-refresh";
+import { refreshSession } from "../../../lib/auth-refresh";
 import { AuthStateStore } from "@/store/auth";
 
 const okBody = {
