@@ -1,16 +1,15 @@
-import { createBanner, getActiveBanners } from "@/server/banners/banners.service";
-import { getAuth, proxy, readFiles, readJsonPart } from "@/server/http";
-import type { BannerRequest } from "@/types";
+import { getActiveBanners } from "@/server/banners/banners.service";
+import { proxy } from "@/server/http";
 
-export async function GET() {
+/**
+ * Handles `GET` requests to fetch publicly active banners through the BFF proxy layer.
+ *
+ * Execution flow:
+ * 1. Invokes {@link getActiveBanners} inside {@link proxy} to query the upstream server service.
+ * 2. Translates upstream results or failures into a standardized Next.js/Web Fetch `Response`.
+ *
+ * @returns A promise resolving to a Web Fetch `Response` containing active banner data or an error payload.
+ */
+export async function GET(): Promise<Response> {
     return proxy(() => getActiveBanners());
-}
-
-export async function POST(request: Request) {
-    return proxy(async () => {
-        const form = await request.formData();
-        const banner = await readJsonPart<BannerRequest>(form, "data");
-        const [image] = readFiles(form, "image");
-        return createBanner(banner, image, getAuth(request));
-    }, 201);
 }
