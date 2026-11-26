@@ -18,9 +18,12 @@ export const revalidate = 60;
  * @returns A promise resolving to the rendered home page JSX.
  */
 export default async function Home() {
-  const banners = await getActiveBanners()
-      .then((res) => res.data ?? [])
-      .catch(() => []);
+    const res = await getActiveBanners();
+    const banners = res.data ?? [];
 
-  return <BannerCarousel banners={banners} />;
+  return (
+      <main>
+        <BannerCarousel banners={banners} />
+      </main>);
+
 }
